@@ -1,38 +1,74 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:sggm/models/instrumentos.dart';
-import 'package:sggm/util/constants.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sggm/services/api_service.dart';
 
 class InstrumentosProvider extends ChangeNotifier {
   List<Instrumento> _instrumentos = [];
-
-  final String apiUrl = AppConstants.instrumentosEndpoint;
+  bool _isLoading = false;
+  String? _errorMessage;
 
   List<Instrumento> get instrumentos => _instrumentos;
+  bool get isLoading => _isLoading;
+  String? get errorMessage => _errorMessage;
 
-  Future<Map<String, String>> _getHeaders() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token');
-    return {
-      'Content-Type': 'application/json; charset=UTF-8',
-      'Authorization': 'Bearer $token',
-    };
-  }
-
+  /// Listar instrumentos
   Future<void> listarInstrumentos() async {
-    final headers = await _getHeaders();
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
 
     try {
-      final response = await http.get(Uri.parse(apiUrl), headers: headers);
+      print('📥 Listando instrumentos...');
+
+      final response = await ApiService.get(
+        '/api/instrumentos/',
+        useAuth: true,
+      );
+
+      print('📡 Status: ${response.statusCode}');
+      print('📡 Data type: ${response.data.runtimeType}');
+      print('📡 Data: ${response.data}');
+
       if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
-        _instrumentos = data.map((item) => Instrumento.fromJson(item)).toList();
-        notifyListeners();
+        final data = response.data;
+
+        // ✅ Extrair lista de results (paginação do DRF)
+        List<dynamic> resultsList;
+
+        if (data is Map && data.containsKey('results')) {
+          resultsList = data['results'] as List<dynamic>;
+        } else if (data is List) {
+          resultsList = data;
+        } else {
+          throw Exception('Formato de resposta inesperado: ${data.runtimeType}');
+        }
+
+        // ✅ Converter para modelo tipado
+        _instrumentos = resultsList.map((json) => Instrumento.fromJson(json as Map<String, dynamic>)).toList();
+
+        print('✅ ${_instrumentos.length} instrumentos carregados');
+
+        // Debug: mostrar instrumentos
+        for (var inst in _instrumentos) {
+          print('   🎸 ${inst.nome} (ID: ${inst.id})');
+        }
+      } else {
+        _errorMessage = 'Erro ${response.statusCode}: ${response.statusMessage}';
+        print('❌ $_errorMessage');
       }
-    } catch (e) {
-      print("Erro listar instrumentos: $e");
+    } catch (e, stackTrace) {
+      _errorMessage = 'Erro ao listar instrumentos: $e';
+      print('❌ $_errorMessage');
+      print('📍 Stack trace: $stackTrace');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
+  }
+
+  /// Limpar erro
+  void clearError() {
+    _errorMessage = null;
+    notifyListeners();
   }
 }

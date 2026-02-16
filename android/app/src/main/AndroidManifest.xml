@@ -2,6 +2,7 @@
     <application
         android:label="sggm"
         android:name="${applicationName}"
+        android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"

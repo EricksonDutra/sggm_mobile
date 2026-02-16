@@ -1,21 +1,26 @@
 class Escala {
   final int? id;
-  final int musicoId; // Para envio ao Backend (FK)
-  final int eventoId; // Para envio ao Backend (FK)
-  final String? musicoNome; // Apenas leitura (vem do Serializer)
-  final String? eventoNome; // Apenas leitura (vem do Serializer)
-  final String instrumentoNoEvento;
+  final int musicoId;
+  final int eventoId;
+  final String? musicoNome;
+  final String? eventoNome;
+  final int? instrumentoNoEvento;
+  final String? instrumentoNome;
   final String? observacao;
+  final bool confirmado;
+  final DateTime? criadoEm;
 
-  Escala({
-    this.id,
-    required this.musicoId,
-    required this.eventoId,
-    this.musicoNome,
-    this.eventoNome,
-    this.instrumentoNoEvento = '',
-    this.observacao,
-  });
+  Escala(
+      {this.id,
+      required this.musicoId,
+      required this.eventoId,
+      this.musicoNome,
+      this.eventoNome,
+      this.instrumentoNoEvento,
+      this.observacao,
+      this.confirmado = false,
+      this.criadoEm,
+      this.instrumentoNome});
 
   factory Escala.fromJson(Map<String, dynamic> json) {
     return Escala(
@@ -24,13 +29,14 @@ class Escala {
       musicoId: json['musico'],
       eventoId: json['evento'],
 
-      // Campos extras que adicionamos no Serializer (read_only)
       musicoNome: json['musico_nome'],
       eventoNome: json['evento_nome'],
 
-      // Snake case padrão Python
-      instrumentoNoEvento: json['instrumento_no_evento'] ?? '',
       observacao: json['observacao'],
+      instrumentoNoEvento: json['instrumento_no_evento'],
+      instrumentoNome: json['instrumento_nome'],
+      confirmado: json['confirmado'] ?? false,
+      criadoEm: json['criado_em'] != null ? DateTime.parse(json['criado_em']) : null,
     );
   }
 
@@ -39,7 +45,8 @@ class Escala {
       if (id != null) 'id': id,
       'musico': musicoId,
       'evento': eventoId,
-      'instrumento_no_evento': instrumentoNoEvento,
+      'instrumento_no_evento':
+          instrumentoNoEvento != null ? instrumentoNoEvento.toString() : '', // Backend aceita string ou ID
       'observacao': observacao ?? '',
     };
   }

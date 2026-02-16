@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sggm/controllers/escalas_controller.dart';
-import 'package:sggm/controllers/eventos_controller.dart'; // Import necessário
+import 'package:sggm/controllers/eventos_controller.dart';
 import 'package:sggm/controllers/instrumentos_controller.dart';
-import 'package:sggm/controllers/musicos_controller.dart'; // Import necessário
+import 'package:sggm/controllers/musicos_controller.dart';
 import 'package:sggm/models/escalas.dart';
+import 'package:sggm/models/instrumentos.dart';
 
 class EscalasPage extends StatefulWidget {
   const EscalasPage({super.key});
@@ -30,13 +31,13 @@ class _EscalasPageState extends State<EscalasPage> {
       final escalasProvider = Provider.of<EscalasProvider>(context, listen: false);
       final musicosProvider = Provider.of<MusicosProvider>(context, listen: false);
       final eventosProvider = Provider.of<EventoProvider>(context, listen: false);
-      final instrumentosProvider = Provider.of<InstrumentosProvider>(context, listen: false); // NOVO
+      final instrumentosProvider = Provider.of<InstrumentosProvider>(context, listen: false);
 
       await Future.wait([
         escalasProvider.listarEscalas(),
         musicosProvider.listarMusicos(),
         eventosProvider.listarEventos(),
-        instrumentosProvider.listarInstrumentos(), // CARREGA DO BANCO
+        instrumentosProvider.listarInstrumentos(),
       ]);
     } catch (e) {
       if (mounted) {
@@ -74,7 +75,7 @@ class _EscalasPageState extends State<EscalasPage> {
                       builder: (context, provider, child) {
                         return DropdownButtonFormField<int>(
                           decoration: const InputDecoration(labelText: 'Músico'),
-                          value: selectedMusicoId,
+                          initialValue: selectedMusicoId,
                           items: provider.musicos.map((musico) {
                             return DropdownMenuItem<int>(
                               value: musico.id,
@@ -90,19 +91,20 @@ class _EscalasPageState extends State<EscalasPage> {
                                 final musico = provider.musicos.firstWhere((m) => m.id == valor);
                                 final instProvider = Provider.of<InstrumentosProvider>(context, listen: false);
 
-                                if (musico.instrumentoPrincipal != null && musico.instrumentoPrincipal!.isNotEmpty) {
+                                if (musico.instrumentoPrincipal != null &&
+                                    musico.instrumentoPrincipal.toString().isNotEmpty) {
                                   // Verifica se o instrumento do músico existe na lista do banco
-                                  bool existeNaLista =
-                                      instProvider.instrumentos.any((i) => i.nome == musico.instrumentoPrincipal);
+                                  bool existeNaLista = instProvider.instrumentos
+                                      .any((i) => i.nome == musico.instrumentoPrincipal.toString());
 
                                   if (existeNaLista) {
-                                    selectedInstrumento = musico.instrumentoPrincipal;
+                                    selectedInstrumento = musico.instrumentoPrincipal.toString();
                                     mostrarCampoOutro = false;
                                   } else {
                                     // Se não existe na lista, vai para "Outro"
                                     selectedInstrumento = 'Outro';
                                     mostrarCampoOutro = true;
-                                    outroInstrumentoController.text = musico.instrumentoPrincipal!;
+                                    outroInstrumentoController.text = musico.instrumentoPrincipal.toString();
                                   }
                                 }
                               }
@@ -118,7 +120,7 @@ class _EscalasPageState extends State<EscalasPage> {
                       builder: (context, provider, child) {
                         return DropdownButtonFormField<int>(
                           decoration: const InputDecoration(labelText: 'Evento'),
-                          value: selectedEventoId,
+                          initialValue: selectedEventoId,
                           items: provider.eventos.map((evento) {
                             return DropdownMenuItem<int>(
                               value: evento.id,
@@ -140,7 +142,7 @@ class _EscalasPageState extends State<EscalasPage> {
 
                         return DropdownButtonFormField<String>(
                           decoration: const InputDecoration(labelText: 'Instrumento'),
-                          value: selectedInstrumento,
+                          initialValue: selectedInstrumento,
                           items: listaOpcoes.map((nome) {
                             return DropdownMenuItem<String>(
                               value: nome,
@@ -187,19 +189,29 @@ class _EscalasPageState extends State<EscalasPage> {
                     }
 
                     String instrumentoFinal = selectedInstrumento!;
+                    int? instrumentoIdFinal;
+
                     if (selectedInstrumento == 'Outro') {
                       if (outroInstrumentoController.text.isEmpty) {
                         ScaffoldMessenger.of(context)
                             .showSnackBar(const SnackBar(content: Text('Digite o instrumento!')));
                         return;
                       }
-                      instrumentoFinal = outroInstrumentoController.text;
+                      // Se for "Outro", talvez precise criar um novo instrumento ou lidar de outra forma.
+                      instrumentoIdFinal = null; // ou lógica para criar/obter o id do novo instrumento
+                    } else {
+                      final instProvider = Provider.of<InstrumentosProvider>(context, listen: false);
+                      final instrumento = instProvider.instrumentos.firstWhere(
+                        (i) => i.nome == instrumentoFinal,
+                        orElse: () => Instrumento(id: 0, nome: ''),
+                      );
+                      instrumentoIdFinal = instrumento.id;
                     }
 
                     final novaEscala = Escala(
                       musicoId: selectedMusicoId!,
                       eventoId: selectedEventoId!,
-                      instrumentoNoEvento: instrumentoFinal,
+                      instrumentoNoEvento: instrumentoIdFinal,
                       observacao: obsController.text,
                     );
 
@@ -264,7 +276,7 @@ class _EscalasPageState extends State<EscalasPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text('em: ${escala.eventoNome ?? 'Evento #${escala.eventoId}'}'),
-                              if (escala.instrumentoNoEvento.isNotEmpty)
+                              if (escala.instrumentoNoEvento.toString().isNotEmpty)
                                 Text(
                                   'Tocando: ${escala.instrumentoNoEvento}',
                                   style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w500),

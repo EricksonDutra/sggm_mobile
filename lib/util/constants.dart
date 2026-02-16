@@ -1,16 +1,20 @@
 class AppConstants {
   static const String baseUrl = String.fromEnvironment(
     'BASE_URL',
-    // defaultValue: 'http://192.168.100.9:8000',
-    defaultValue: 'https://api.ericksondutra.cloud',
+    defaultValue: 'https://api.ericksondutra.cloud', // Produção
   );
 
+  // ✅ Endpoints COMPLETOS (com baseUrl) para uso direto
   static const String escalasEndpoint = '$baseUrl/api/escalas/';
   static const String musicosEndpoint = '$baseUrl/api/musicos/';
   static const String eventosEndpoint = '$baseUrl/api/eventos/';
   static const String instrumentosEndpoint = '$baseUrl/api/instrumentos/';
   static const String musicasEndpoint = '$baseUrl/api/musicas/';
-  static const String loginEndpoint = '$baseUrl/api/login/';
+
+  // ✅ Endpoints RELATIVOS (sem baseUrl) para uso com ApiService
+  static const String loginPath = '/api/login/';
+  static const String refreshTokenPath = '/api/token/refresh/';
+  static const String atualizarFCMTokenPath = '/api/musicos/atualizar_fcm_token/';
 }
 
 class AppRoutes {

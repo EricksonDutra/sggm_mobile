@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:sggm/controllers/instrumentos_controller.dart';
 import 'package:sggm/controllers/musicos_controller.dart';
 import 'package:sggm/models/musicos.dart';
 
@@ -41,73 +42,151 @@ class _MusicosPageState extends State<MusicosPage> {
     }
   }
 
-  // Diálogo para cadastro rápido
-  void _mostrarDialogoAdicionar(BuildContext context) {
+  void _mostrarDialogoAdicionar(BuildContext context) async {
+    // ✅ Carrega instrumentos ANTES de mostrar o diálogo
+    final instrumentosProvider = Provider.of<InstrumentosProvider>(context, listen: false);
+
+    if (instrumentosProvider.instrumentos.isEmpty) {
+      // Mostra loading
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => const Center(child: CircularProgressIndicator()),
+      );
+
+      await instrumentosProvider.listarInstrumentos();
+
+      if (context.mounted) {
+        Navigator.pop(context); // Fecha loading
+      }
+    }
+
+    // Agora mostra o diálogo com os dados já carregados
     final nomeController = TextEditingController();
     final telefoneController = TextEditingController();
     final emailController = TextEditingController();
-    final instrumentoController = TextEditingController();
     final enderecoController = TextEditingController();
+
+    int? instrumentoSelecionadoId;
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Novo Músico'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: nomeController, decoration: const InputDecoration(labelText: 'Nome *')),
-              TextField(
-                  controller: instrumentoController,
-                  decoration: const InputDecoration(labelText: 'Instrumento Principal (Ex: Baixo)')),
-              TextField(
-                controller: telefoneController,
-                decoration: const InputDecoration(labelText: 'Telefone *'),
-                keyboardType: TextInputType.phone,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setStateDialog) {
+          return AlertDialog(
+            title: const Text('Novo Músico'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nomeController,
+                    decoration: const InputDecoration(labelText: 'Nome *'),
+                  ),
+                  TextField(
+                    controller: telefoneController,
+                    decoration: const InputDecoration(labelText: 'Telefone *'),
+                    keyboardType: TextInputType.phone,
+                  ),
+                  TextField(
+                    controller: emailController,
+                    decoration: const InputDecoration(labelText: 'Email *'),
+                    keyboardType: TextInputType.emailAddress,
+                  ),
+                  TextField(
+                    controller: enderecoController,
+                    decoration: const InputDecoration(labelText: 'Endereço'),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // ✅ Agora os dados já estão carregados, sem FutureBuilder
+                  Consumer<InstrumentosProvider>(
+                    builder: (context, provider, child) {
+                      if (provider.instrumentos.isEmpty) {
+                        return const Text(
+                          'Nenhum instrumento disponível.',
+                          style: TextStyle(color: Colors.red),
+                        );
+                      }
+
+                      return DropdownButtonFormField<int>(
+                        decoration: const InputDecoration(
+                          labelText: 'Instrumento Principal',
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        ),
+                        isExpanded: true,
+                        initialValue: instrumentoSelecionadoId,
+                        items: provider.instrumentos.map((instrumento) {
+                          return DropdownMenuItem<int>(
+                            value: instrumento.id,
+                            child: Text(instrumento.nome),
+                          );
+                        }).toList(),
+                        onChanged: (novoValor) {
+                          setStateDialog(() {
+                            instrumentoSelecionadoId = novoValor;
+                          });
+                        },
+                      );
+                    },
+                  ),
+                ],
               ),
-              TextField(
-                controller: emailController,
-                decoration: const InputDecoration(labelText: 'Email *'),
-                keyboardType: TextInputType.emailAddress,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Cancelar'),
               ),
-              TextField(
-                controller: enderecoController,
-                decoration: const InputDecoration(labelText: 'Endereço'),
+              ElevatedButton(
+                onPressed: () {
+                  // Validação simples
+                  if (nomeController.text.isEmpty || emailController.text.isEmpty || telefoneController.text.isEmpty) {
+                    ScaffoldMessenger.of(context)
+                        .showSnackBar(const SnackBar(content: Text('Preencha nome, telefone e email!')));
+                    return;
+                  }
+
+                  // Cria o objeto Musico
+                  final novoMusico = Musico(
+                    nome: nomeController.text,
+                    telefone: telefoneController.text,
+                    email: emailController.text,
+                    instrumentoPrincipal: instrumentoSelecionadoId,
+                    endereco: enderecoController.text.isNotEmpty ? enderecoController.text : null,
+                    status: 'ATIVO',
+                  );
+
+                  // ✅ Converte para Map e envia
+                  Provider.of<MusicosProvider>(context, listen: false)
+                      .adicionarMusico(novoMusico.toJson()) // ✅ Usando toJson()
+                      .then((sucesso) {
+                    if (sucesso) {
+                      Navigator.of(ctx).pop();
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text('Músico cadastrado com sucesso!'),
+                        backgroundColor: Colors.green,
+                      ));
+                    } else {
+                      final erro = Provider.of<MusicosProvider>(context, listen: false).errorMessage;
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(erro ?? 'Erro ao cadastrar músico'),
+                        backgroundColor: Colors.red,
+                      ));
+                    }
+                  }).catchError((e) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text('Erro: $e'),
+                      backgroundColor: Colors.red,
+                    ));
+                  });
+                },
+                child: const Text('Salvar'),
               ),
             ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancelar')),
-          ElevatedButton(
-            onPressed: () {
-              // Validação básica
-              if (nomeController.text.isEmpty || emailController.text.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Preencha nome e email!')));
-                return;
-              }
-
-              final novoMusico = Musico(
-                nome: nomeController.text,
-                telefone: telefoneController.text,
-                email: emailController.text,
-                instrumentoPrincipal: instrumentoController.text,
-                endereco: enderecoController.text,
-              );
-
-              // Chama o provider para salvar no Django
-              Provider.of<MusicosProvider>(context, listen: false).adicionarMusico(novoMusico).then((_) {
-                Navigator.of(ctx).pop(); // Fecha o diálogo
-                ScaffoldMessenger.of(context)
-                    .showSnackBar(const SnackBar(content: Text('Músico cadastrado com sucesso!')));
-              }).catchError((e) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e')));
-              });
-            },
-            child: const Text('Salvar'),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -154,12 +233,34 @@ class _MusicosPageState extends State<MusicosPage> {
                         elevation: 3,
                         margin: const EdgeInsets.symmetric(vertical: 6),
                         child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: Colors.deepPurple,
-                            child: Text(
-                              musico.nome.isNotEmpty ? musico.nome[0].toUpperCase() : '?',
-                              style: const TextStyle(color: Colors.white),
-                            ),
+                          leading: Stack(
+                            children: [
+                              CircleAvatar(
+                                backgroundColor: musico.status == 'ATIVO'
+                                    ? Colors.deepPurple
+                                    : musico.status == 'AFASTADO'
+                                        ? Colors.orange
+                                        : Colors.grey,
+                                child: Text(
+                                  musico.nome.isNotEmpty ? musico.nome[0].toUpperCase() : '?',
+                                  style: const TextStyle(color: Colors.white),
+                                ),
+                              ),
+                              if (musico.status != 'ATIVO')
+                                Positioned(
+                                  right: 0,
+                                  bottom: 0,
+                                  child: Container(
+                                    width: 12,
+                                    height: 12,
+                                    decoration: BoxDecoration(
+                                      color: musico.status == 'INATIVO' ? Colors.red : Colors.orange,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: Colors.white, width: 1.5),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                           title: Text(
                             musico.nome,
@@ -168,7 +269,8 @@ class _MusicosPageState extends State<MusicosPage> {
                           subtitle: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              if (musico.instrumentoPrincipal != null && musico.instrumentoPrincipal!.isNotEmpty)
+                              if (musico.instrumentoPrincipalNome != null &&
+                                  musico.instrumentoPrincipalNome!.isNotEmpty)
                                 Padding(
                                   padding: const EdgeInsets.only(top: 4.0),
                                   child: Row(
@@ -176,7 +278,7 @@ class _MusicosPageState extends State<MusicosPage> {
                                       const Icon(Icons.music_note, size: 14, color: Colors.grey),
                                       const SizedBox(width: 4),
                                       Text(
-                                        musico.instrumentoPrincipal!,
+                                        musico.instrumentoPrincipalNome!,
                                         style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.w500),
                                       ),
                                     ],

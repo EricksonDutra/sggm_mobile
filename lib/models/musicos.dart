@@ -1,10 +1,16 @@
 class Musico {
-  final int? id; // Backend envia 'id', não 'musicoId'
+  final int? id;
   final String nome;
   final String telefone;
   final String email;
   final String? endereco;
-  final String? instrumentoPrincipal; // Novo campo que criamos no Django
+  final int? instrumentoPrincipal;
+  final String? instrumentoPrincipalNome;
+  final String status; // ATIVO, INATIVO, AFASTADO
+  final DateTime? dataInicioInatividade;
+  final DateTime? dataFimInatividade;
+  final String? motivoInatividade;
+  final DateTime? dataCadastro;
 
   Musico({
     this.id,
@@ -13,22 +19,32 @@ class Musico {
     required this.email,
     this.endereco,
     this.instrumentoPrincipal,
+    this.instrumentoPrincipalNome,
+    this.status = 'ATIVO',
+    this.dataInicioInatividade,
+    this.dataFimInatividade,
+    this.motivoInatividade,
+    this.dataCadastro,
   });
 
-  // Mapeia do Python (snake_case) para Dart
   factory Musico.fromJson(Map<String, dynamic> json) {
     return Musico(
       id: json['id'],
       nome: json['nome'],
-      telefone: json['telefone'],
+      telefone: json['telefone'] ?? '',
       email: json['email'],
       endereco: json['endereco'],
-      // Mapeia o campo novo se existir
       instrumentoPrincipal: json['instrumento_principal'],
+      instrumentoPrincipalNome: json['instrumento_principal_nome'],
+      status: json['status'] ?? 'ATIVO',
+      dataInicioInatividade:
+          json['data_inicio_inatividade'] != null ? DateTime.parse(json['data_inicio_inatividade']) : null,
+      dataFimInatividade: json['data_fim_inatividade'] != null ? DateTime.parse(json['data_fim_inatividade']) : null,
+      motivoInatividade: json['motivo_inatividade'],
+      dataCadastro: json['data_cadastro'] != null ? DateTime.parse(json['data_cadastro']) : null,
     );
   }
 
-  // Mapeia do Dart para Python (snake_case)
   Map<String, dynamic> toJson() {
     return {
       if (id != null) 'id': id,
@@ -36,8 +52,11 @@ class Musico {
       'telefone': telefone,
       'email': email,
       'endereco': endereco,
-      // Envia no formato que o Django espera
       'instrumento_principal': instrumentoPrincipal,
+      'status': status,
+      'data_inicio_inatividade': dataInicioInatividade?.toIso8601String(),
+      'data_fim_inatividade': dataFimInatividade?.toIso8601String(),
+      'motivo_inatividade': motivoInatividade,
     };
   }
 }

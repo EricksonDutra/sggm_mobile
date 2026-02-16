@@ -1,9 +1,19 @@
 import 'package:flutter/material.dart';
 
-Widget buildTextField( {required TextEditingController controller, required String labelText, bool obscureText = false}) {
+Widget buildTextField({
+  required TextEditingController controller,
+  required String labelText,
+  bool obscureText = false,
+  FocusNode? focusNode,
+  Function(String)? onSubmitted,
+  TextInputType keyboardType = TextInputType.text,
+}) {
   return TextField(
     controller: controller,
+    focusNode: focusNode,
     obscureText: obscureText,
+    keyboardType: keyboardType,
+    onSubmitted: onSubmitted,
     textAlign: TextAlign.center,
     decoration: InputDecoration(
       border: OutlineInputBorder(
@@ -19,14 +29,21 @@ Widget buildTextField( {required TextEditingController controller, required Stri
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(25),
         borderSide: const BorderSide(
-          color: Colors.grey,
+          color: Colors.deepPurple,
+          width: 2,
+        ),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(25),
+        borderSide: BorderSide(
+          color: Colors.grey.shade700,
         ),
       ),
     ),
     style: const TextStyle(
       color: Colors.white,
       fontFamily: 'Inknut_Antiqua',
-    ), // Cor do texto inserido pelo usuário
-    cursorColor: const Color.fromARGB(255, 6, 124, 41), // Cor do cursor
+    ),
+    cursorColor: const Color.fromARGB(255, 6, 124, 41),
   );
 }

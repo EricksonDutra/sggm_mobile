@@ -1,28 +1,44 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
+
+import 'package:sggm/controllers/auth_controller.dart';
 import 'package:sggm/controllers/escalas_controller.dart';
 import 'package:sggm/controllers/eventos_controller.dart';
-import 'package:sggm/controllers/musicos_controller.dart';
 import 'package:sggm/controllers/instrumentos_controller.dart';
 import 'package:sggm/controllers/musicas_controller.dart';
-import 'package:sggm/controllers/auth_controller.dart';
-import 'package:sggm/home_page.dart';
+import 'package:sggm/controllers/musicos_controller.dart';
+import 'package:sggm/services/notification_service.dart';
+import 'package:sggm/services/secure_token_service.dart';
+import 'package:sggm/services/token_migration_service.dart';
 import 'package:sggm/views/login_page.dart';
+import 'package:sggm/home_page.dart';
+import 'firebase_options.dart';
 
-void main() {
-  runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => EventoProvider()),
-        ChangeNotifierProvider(create: (_) => EscalasProvider()),
-        ChangeNotifierProvider(create: (_) => MusicosProvider()),
-        ChangeNotifierProvider(create: (_) => InstrumentosProvider()),
-        ChangeNotifierProvider(create: (_) => MusicasProvider()),
-      ],
-      child: const MyApp(),
-    ),
-  );
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // 🔐 Executar migração se necessário
+  final secureTokenService = SecureTokenService();
+  final migrationService = TokenMigrationService(secureTokenService);
+  await migrationService.migrateIfNeeded();
+
+  try {
+    // Inicializar Firebase
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    print('✅ Firebase inicializado com sucesso');
+
+    // Inicializar serviço de notificações
+    await NotificationService().initialize();
+    print('✅ Serviço de notificações inicializado');
+  } catch (e, stackTrace) {
+    print('❌ Erro ao inicializar Firebase/Notificações: $e');
+    print('StackTrace: $stackTrace');
+  }
+
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -30,22 +46,105 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<AuthProvider>(
-      builder: (context, auth, _) {
-        return MaterialApp(
-          title: 'Eventos App',
-          // home: const HomePage(),
-          home: auth.isAuthenticated
-              ? const HomePage()
-              : FutureBuilder(
-                  future: auth.tryAutoLogin(),
-                  builder: (ctx, snapshot) => auth.isAuthenticated ? const HomePage() : const LoginPage(),
-                ),
-          debugShowCheckedModeBanner: false,
-          themeMode: ThemeMode.dark,
-          theme: ThemeData.dark(useMaterial3: true),
-        );
-      },
+    return MultiProvider(
+      providers: [
+        // 🔐 Provider de serviço seguro de token
+        Provider<SecureTokenService>(
+          create: (_) => SecureTokenService(),
+        ),
+
+        // 🔐 Provider de autenticação
+        ChangeNotifierProvider(
+          create: (context) {
+            final secureTokenService = context.read<SecureTokenService>();
+            final authProvider = AuthProvider(
+              secureTokenService: secureTokenService,
+            );
+
+            // ✅ Carregar autenticação salva de forma assíncrona
+            authProvider.loadSavedAuth();
+
+            // ✅ Configurar listener APENAS para refresh
+            // (não tenta enviar na inicialização)
+            NotificationService().onTokenRefresh((newToken) {
+              print('🔄 Token FCM foi atualizado pelo Firebase');
+              // Só reenvia se já estiver autenticado
+              if (authProvider.isAuthenticated) {
+                authProvider.reenviarFCMToken();
+              }
+            });
+
+            return authProvider;
+          },
+        ),
+
+        // Providers dos demais controllers
+        ChangeNotifierProvider(create: (_) => EventoProvider()),
+        ChangeNotifierProvider(create: (_) => EscalasProvider()),
+        ChangeNotifierProvider(create: (_) => MusicosProvider()),
+        ChangeNotifierProvider(create: (_) => InstrumentosProvider()),
+        ChangeNotifierProvider(create: (_) => MusicasProvider()),
+      ],
+      child: Consumer<AuthProvider>(
+        builder: (context, authProvider, _) {
+          return MaterialApp(
+            title: 'SGGM',
+            debugShowCheckedModeBanner: false,
+            theme: _buildAppTheme(),
+            // ✅ Navegação corrigida com base na autenticação
+            routes: {
+              '/': (context) => const LoginPage(),
+              '/home': (context) => const HomePage(),
+            },
+            // ✅ Usar initialRoute baseado na autenticação
+            initialRoute: authProvider.isAuthenticated ? '/home' : '/',
+          );
+        },
+      ),
+    );
+  }
+
+  /// Construir tema da aplicação
+  ThemeData _buildAppTheme() {
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      primarySwatch: Colors.deepPurple,
+      scaffoldBackgroundColor: const Color(0xFF121212),
+      appBarTheme: const AppBarTheme(
+        centerTitle: true,
+        elevation: 2,
+        backgroundColor: Color(0xFF1E1E1E),
+      ),
+      cardTheme: CardThemeData(
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        color: const Color(0xFF1E1E1E),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        filled: true,
+        fillColor: const Color(0xFF2A2A2A),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 24,
+            vertical: 12,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      ),
     );
   }
 }
