@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import 'package:sggm/controllers/auth_controller.dart';
 import 'package:sggm/controllers/escalas_controller.dart';
 import 'package:sggm/controllers/eventos_controller.dart';

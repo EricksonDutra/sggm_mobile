@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:sggm/services/api_service.dart';
@@ -46,7 +47,9 @@ class AuthProvider extends ChangeNotifier {
       final savedRefreshToken = await _secureTokenService.getRefreshToken();
 
       if (savedRefreshToken == null || savedRefreshToken.isEmpty) {
-        print('⚠️ Refresh token não encontrado');
+        if (kDebugMode) {
+          print('⚠️ Refresh token não encontrado');
+        }
         await logout();
         return false;
       }
