@@ -4,11 +4,13 @@ import 'package:dio/dio.dart';
 import 'package:sggm/services/api_service.dart';
 import 'package:sggm/services/notification_service.dart';
 import 'package:sggm/services/secure_token_service.dart';
+import 'package:sggm/services/biometric_service.dart';
 import 'package:sggm/util/constants.dart';
 
 class AuthProvider extends ChangeNotifier {
   // ========== Secure Storage ==========
   late SecureTokenService _secureTokenService;
+  late BiometricService _biometricService;
 
   // ========== State ==========
   bool _isAuthenticated = false;
@@ -33,6 +35,77 @@ class AuthProvider extends ChangeNotifier {
   // ========== Constructor ==========
   AuthProvider({SecureTokenService? secureTokenService}) {
     _secureTokenService = secureTokenService ?? SecureTokenService();
+    _biometricService = BiometricService();
+  }
+
+  // ========== REFRESH TOKEN ==========
+  /// Renovar access token usando refresh token
+  Future<bool> refreshAccessToken() async {
+    try {
+      // Recuperar refresh token do storage
+      final savedRefreshToken = await _secureTokenService.getRefreshToken();
+
+      if (savedRefreshToken == null || savedRefreshToken.isEmpty) {
+        print('⚠️ Refresh token não encontrado');
+        await logout();
+        return false;
+      }
+
+      print('🔄 Renovando access token...');
+
+      final dio = Dio(BaseOptions(
+        baseUrl: AppConstants.baseUrl,
+        connectTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 10),
+      ));
+
+      final response = await dio.post(
+        '/api/token/refresh/',
+        data: {'refresh': savedRefreshToken},
+        options: Options(
+          contentType: Headers.jsonContentType,
+          validateStatus: (status) => status != null && status < 500,
+        ),
+      );
+
+      if (response.statusCode == 200) {
+        final newAccessToken = response.data['access'] as String;
+        _token = newAccessToken;
+
+        // Atualizar token no storage (mantendo o refresh token)
+        await _secureTokenService.saveCredentials(
+          token: newAccessToken,
+          refreshToken: savedRefreshToken,
+          isLider: _isLider,
+          musicoId: _userData?['musico_id'] ?? 0,
+          tipoUsuario: _userData?['tipo_usuario'] ?? 'MUSICO',
+          nome: _userData?['nome'],
+          username: _userData?['username'],
+          email: _userData?['email'],
+        );
+
+        print('✅ Access token renovado com sucesso');
+        notifyListeners();
+        return true;
+      } else if (response.statusCode == 401) {
+        // Refresh token expirou, fazer logout
+        print('❌ Refresh token expirado, redirecionando para login');
+        await logout();
+        return false;
+      }
+
+      print('❌ Erro ao renovar token: ${response.statusCode}');
+      return false;
+    } on DioException catch (e) {
+      print('❌ Erro ao renovar token: ${e.message}');
+      if (e.response?.statusCode == 401) {
+        await logout();
+      }
+      return false;
+    } catch (e) {
+      print('❌ Exceção ao renovar token: $e');
+      return false;
+    }
   }
 
   // ========== LOGIN ==========
@@ -91,9 +164,13 @@ class AuthProvider extends ChangeNotifier {
         // 🔐 Salvar credenciais de forma segura
         await _secureTokenService.saveCredentials(
           token: _token!,
+          refreshToken: _refreshToken,
           isLider: _isLider,
-          musicoId: data['musico_id'] ?? 0, // ✅ NOVO
-          tipoUsuario: data['tipo_usuario'] ?? 'MUSICO', // ✅ NOVO
+          musicoId: data['musico_id'] ?? 0,
+          tipoUsuario: data['tipo_usuario'] ?? 'MUSICO',
+          nome: data['nome'],
+          username: data['username'],
+          email: data['email'],
         );
 
         print('✅ Login realizado: ${_userData!['nome']}');
@@ -176,24 +253,49 @@ class AuthProvider extends ChangeNotifier {
     try {
       print('🔍 Verificando autenticação salva...');
       final hasCredentials = await _secureTokenService.hasCredentials();
+
       if (hasCredentials) {
         _token = await _secureTokenService.getToken();
+        _refreshToken = await _secureTokenService.getRefreshToken();
         _isLider = await _secureTokenService.getIsLider();
 
         final musicoId = await _secureTokenService.getMusicoId();
         final tipoUsuario = await _secureTokenService.getTipoUsuario();
+        final nome = await _secureTokenService.getNome();
+        final username = await _secureTokenService.getUsername();
+        final email = await _secureTokenService.getEmail();
 
-        _isAuthenticated = true;
-
-        // ✅ Reconstruir userData a partir do storage
+        // ✅ Reconstruir userData ANTES de verificar token
         _userData = {
           'musico_id': musicoId,
           'tipo_usuario': tipoUsuario,
           'is_lider': _isLider,
+          'nome': nome,
+          'username': username,
+          'email': email,
+          'refresh': _refreshToken,
         };
-        print('✅ Token JWT carregado do armazenamento seguro');
+
+        // ✅ Verificar validade do token e renovar se necessário
+        if (!isTokenValid()) {
+          print('⚠️ Access token expirado, tentando renovar...');
+          final renewed = await refreshAccessToken();
+          if (!renewed) {
+            print('❌ Não foi possível renovar o token');
+            // Limpar dados e forçar novo login
+            _isAuthenticated = false;
+            _userData = null;
+            notifyListeners();
+            return;
+          }
+        }
+
+        _isAuthenticated = true;
+
+        print('✅ Sessão restaurada: $nome');
         print('👤 Músico ID: $musicoId');
         print('👤 Tipo: $tipoUsuario');
+        print('⏰ Token válido por: ${getTokenExpirationMinutes()} minutos');
 
         // ✅ Reenviar FCM token apenas se autenticado
         await enviarFCMToken();
@@ -202,10 +304,112 @@ class AuthProvider extends ChangeNotifier {
       } else {
         print('ℹ️ Nenhuma sessão salva encontrada');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('❌ Erro ao carregar auth: $e');
+      print('📋 StackTrace: $stackTrace');
       _isAuthenticated = false;
+      _userData = null;
       notifyListeners();
+    }
+  }
+
+  /// Verificar se pode usar biometria
+  Future<bool> canUseBiometric() async {
+    try {
+      return await _biometricService.isBiometricAvailable();
+    } catch (e) {
+      print('❌ Erro ao verificar biometria: $e');
+      return false;
+    }
+  }
+
+  /// Verificar se biometria está habilitada
+  Future<bool> isBiometricEnabled() async {
+    try {
+      return await _secureTokenService.isBiometricEnabled();
+    } catch (e) {
+      print('❌ Erro ao verificar se biometria está habilitada: $e');
+      return false;
+    }
+  }
+
+  /// Obter descrição da biometria disponível
+  Future<String> getBiometricDescription() async {
+    try {
+      return await _biometricService.getBiometricTypeDescription();
+    } catch (e) {
+      print('❌ Erro ao obter descrição da biometria: $e');
+      return 'Biometria';
+    }
+  }
+
+  /// Habilitar login biométrico
+  Future<void> enableBiometricLogin() async {
+    try {
+      if (_userData?['username'] != null) {
+        await _secureTokenService.enableBiometricLogin(_userData!['username']);
+        print('✅ Login biométrico habilitado');
+        notifyListeners();
+      } else {
+        print('⚠️ Username não disponível para habilitar biometria');
+      }
+    } catch (e) {
+      print('❌ Erro ao habilitar biometria: $e');
+      rethrow;
+    }
+  }
+
+  /// Desabilitar login biométrico
+  Future<void> disableBiometricLogin() async {
+    try {
+      await _secureTokenService.disableBiometricLogin();
+      print('✅ Login biométrico desabilitado');
+      notifyListeners();
+    } catch (e) {
+      print('❌ Erro ao desabilitar biometria: $e');
+      rethrow;
+    }
+  }
+
+  /// Login com biometria
+  Future<bool> loginWithBiometric() async {
+    try {
+      print('🔐 Iniciando login biométrico...');
+
+      // Verificar se biometria está habilitada
+      final enabled = await _secureTokenService.isBiometricEnabled();
+      if (!enabled) {
+        print('⚠️ Login biométrico não habilitado');
+        return false;
+      }
+
+      // Verificar se há credenciais salvas
+      final hasCredentials = await _secureTokenService.hasCredentials();
+      if (!hasCredentials) {
+        print('⚠️ Sem credenciais salvas');
+        return false;
+      }
+
+      // Autenticar com biometria
+      final authenticated = await _biometricService.authenticate(
+        reason: 'Autentique-se para acessar o SGGM',
+        useErrorDialogs: true,
+        stickyAuth: true,
+      );
+
+      if (!authenticated) {
+        print('❌ Autenticação biométrica falhou ou foi cancelada');
+        return false;
+      }
+
+      // Se autenticou, restaurar sessão
+      print('✅ Biometria validada, restaurando sessão...');
+      await loadSavedAuth();
+
+      return _isAuthenticated;
+    } catch (e) {
+      print('❌ Erro no login biométrico: $e');
+      return false;
     }
   }
 
@@ -258,7 +462,10 @@ class AuthProvider extends ChangeNotifier {
       if (exp == null) return false;
 
       final expirationDate = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
-      return DateTime.now().isBefore(expirationDate);
+      final now = DateTime.now();
+
+      // ✅ Adicionar margem de segurança de 30 segundos
+      return now.isBefore(expirationDate.subtract(const Duration(seconds: 30)));
     } catch (e) {
       print('⚠️ Erro ao validar token: $e');
       return false;
@@ -290,6 +497,28 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  /// Obter data de expiração do token formatada
+  String? getTokenExpirationDate() {
+    if (_token == null) return null;
+    try {
+      final parts = _token!.split('.');
+      if (parts.length != 3) return null;
+
+      final payload = json.decode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      );
+
+      final exp = payload['exp'] as int?;
+      if (exp == null) return null;
+
+      final expirationDate = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
+      return '${expirationDate.day}/${expirationDate.month}/${expirationDate.year} ${expirationDate.hour}:${expirationDate.minute}';
+    } catch (e) {
+      print('⚠️ Erro ao obter data de expiração: $e');
+      return null;
+    }
+  }
+
   /// Obter informações do usuário decodificadas do token
   Map<String, dynamic>? getTokenPayload() {
     if (_token == null) return null;
@@ -306,5 +535,10 @@ class AuthProvider extends ChangeNotifier {
       print('⚠️ Erro ao decodificar token: $e');
       return null;
     }
+  }
+
+  /// ✅ NOVO: Forçar atualização do estado de autenticação
+  void forceAuthStateUpdate() {
+    notifyListeners();
   }
 }

@@ -16,6 +16,7 @@ import 'package:sggm/home_page.dart';
 import 'firebase_options.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:sggm/theme/app_theme.dart';
+import 'package:sggm/views/debug/biometric_test_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -107,6 +108,7 @@ class MyApp extends StatelessWidget {
             routes: {
               '/': (context) => const LoginPage(),
               '/home': (context) => const HomePage(),
+              '/biometric_test': (context) => const BiometricTestPage(), // ✅ Adicione
             },
             // ✅ Usar initialRoute baseado na autenticação
             initialRoute: authProvider.isAuthenticated ? '/home' : '/',

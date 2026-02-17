@@ -5,6 +5,7 @@ import 'package:sggm/controllers/instrumentos_controller.dart';
 import 'package:sggm/controllers/musicos_controller.dart';
 import 'package:sggm/models/musicos.dart';
 import 'package:intl/intl.dart';
+import 'package:sggm/services/biometric_service.dart';
 
 class PerfilEditPage extends StatefulWidget {
   final Musico musico;
@@ -494,6 +495,96 @@ class _PerfilEditPageState extends State<PerfilEditPage> {
                 ],
               ),
             ),
+    );
+  }
+}
+
+class BiometricSettingTile extends StatefulWidget {
+  const BiometricSettingTile({super.key});
+
+  @override
+  State<BiometricSettingTile> createState() => _BiometricSettingTileState();
+}
+
+class _BiometricSettingTileState extends State<BiometricSettingTile> {
+  bool _enabled = false;
+  bool _available = false;
+  String _type = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final available = await auth.canUseBiometric();
+    final enabled = await auth.isBiometricEnabled();
+    final type = await auth.getBiometricDescription();
+
+    setState(() {
+      _available = available;
+      _enabled = enabled;
+      _type = type;
+    });
+  }
+
+  Future<void> _toggleBiometric(bool value) async {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+
+    if (value) {
+      // Habilitar - pedir autenticação primeiro
+      final authenticated = await BiometricService().authenticate(
+        reason: 'Confirme para habilitar login biométrico',
+      );
+
+      if (authenticated) {
+        await auth.enableBiometricLogin();
+        setState(() => _enabled = true);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Login biométrico habilitado'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      }
+    } else {
+      // Desabilitar
+      await auth.disableBiometricLogin();
+      setState(() => _enabled = false);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Login biométrico desabilitado'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_available) {
+      return const ListTile(
+        leading: Icon(Icons.fingerprint, color: Colors.grey),
+        title: Text('Login Biométrico'),
+        subtitle: Text('Não disponível neste dispositivo'),
+        enabled: false,
+      );
+    }
+
+    return SwitchListTile(
+      secondary: const Icon(Icons.fingerprint),
+      title: const Text('Login Biométrico'),
+      subtitle: Text(_type),
+      value: _enabled,
+      onChanged: _toggleBiometric,
     );
   }
 }
