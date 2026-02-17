@@ -66,6 +66,130 @@ class InstrumentosProvider extends ChangeNotifier {
     }
   }
 
+  // ✅ NOVO: Adicionar instrumento
+  Future<Instrumento?> adicionarInstrumento(Map<String, dynamic> instrumentoData) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      print('📤 Adicionando instrumento...');
+      print('   Dados: $instrumentoData');
+
+      final response = await ApiService.post(
+        '/api/instrumentos/',
+        body: instrumentoData,
+      );
+
+      print('📡 Status: ${response.statusCode}');
+      print('📡 Response: ${response.data}');
+
+      if (response.statusCode == 201) {
+        // ✅ Instrumento criado com sucesso
+        final novoInstrumento = Instrumento.fromJson(response.data as Map<String, dynamic>);
+
+        print('✅ Instrumento criado: ${novoInstrumento.nome} (ID: ${novoInstrumento.id})');
+
+        // ✅ Adicionar à lista local
+        _instrumentos.add(novoInstrumento);
+        _instrumentos.sort((a, b) => a.nome.compareTo(b.nome)); // Ordenar alfabeticamente
+
+        notifyListeners();
+        return novoInstrumento;
+      } else {
+        _errorMessage = 'Erro ${response.statusCode}: ${response.data}';
+        print('❌ $_errorMessage');
+        notifyListeners();
+        return null;
+      }
+    } catch (e, stackTrace) {
+      _errorMessage = 'Erro ao adicionar instrumento: $e';
+      print('❌ $_errorMessage');
+      print('📍 Stack trace: $stackTrace');
+      notifyListeners();
+      return null;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // ✅ NOVO: Atualizar instrumento
+  Future<bool> atualizarInstrumento(int id, Map<String, dynamic> instrumentoData) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      print('📤 Atualizando instrumento $id...');
+      print('   Dados: $instrumentoData');
+
+      final response = await ApiService.put(
+        '/api/instrumentos/$id/',
+        body: instrumentoData,
+      );
+
+      if (response.statusCode == 200) {
+        print('✅ Instrumento atualizado com sucesso');
+
+        // Recarregar lista
+        await listarInstrumentos();
+        return true;
+      } else {
+        _errorMessage = 'Erro ao atualizar instrumento: ${response.data}';
+        print('❌ $_errorMessage');
+        notifyListeners();
+        return false;
+      }
+    } catch (e, stackTrace) {
+      _errorMessage = 'Erro ao atualizar instrumento: $e';
+      print('❌ $_errorMessage');
+      print('📍 Stack trace: $stackTrace');
+      notifyListeners();
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // ✅ NOVO: Deletar instrumento
+  Future<bool> deletarInstrumento(int id) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      print('🗑️ Deletando instrumento $id...');
+
+      final response = await ApiService.delete('/api/instrumentos/$id/');
+
+      if (response.statusCode == 204) {
+        print('✅ Instrumento deletado com sucesso');
+
+        // ✅ Remover da lista local
+        _instrumentos.removeWhere((inst) => inst.id == id);
+
+        notifyListeners();
+        return true;
+      } else {
+        _errorMessage = 'Erro ao deletar instrumento: ${response.data}';
+        print('❌ $_errorMessage');
+        notifyListeners();
+        return false;
+      }
+    } catch (e, stackTrace) {
+      _errorMessage = 'Erro ao deletar instrumento: $e';
+      print('❌ $_errorMessage');
+      print('📍 Stack trace: $stackTrace');
+      notifyListeners();
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   /// Limpar erro
   void clearError() {
     _errorMessage = null;

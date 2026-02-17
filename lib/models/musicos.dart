@@ -6,6 +6,7 @@ class Musico {
   final String? endereco;
   final int? instrumentoPrincipal;
   final String? instrumentoPrincipalNome;
+  final String tipoUsuario;
   final String status; // ATIVO, INATIVO, AFASTADO
   final DateTime? dataInicioInatividade;
   final DateTime? dataFimInatividade;
@@ -20,12 +21,15 @@ class Musico {
     this.endereco,
     this.instrumentoPrincipal,
     this.instrumentoPrincipalNome,
+    this.tipoUsuario = 'MUSICO',
     this.status = 'ATIVO',
     this.dataInicioInatividade,
     this.dataFimInatividade,
     this.motivoInatividade,
     this.dataCadastro,
   });
+
+  bool get isLider => tipoUsuario == 'LIDER' || tipoUsuario == 'ADMIN';
 
   factory Musico.fromJson(Map<String, dynamic> json) {
     return Musico(
@@ -36,6 +40,7 @@ class Musico {
       endereco: json['endereco'],
       instrumentoPrincipal: json['instrumento_principal'],
       instrumentoPrincipalNome: json['instrumento_principal_nome'],
+      tipoUsuario: json['tipo_usuario'] ?? 'MUSICO',
       status: json['status'] ?? 'ATIVO',
       dataInicioInatividade:
           json['data_inicio_inatividade'] != null ? DateTime.parse(json['data_inicio_inatividade']) : null,
@@ -53,9 +58,10 @@ class Musico {
       'email': email,
       'endereco': endereco,
       'instrumento_principal': instrumentoPrincipal,
+      'tipo_usuario': tipoUsuario,
       'status': status,
-      'data_inicio_inatividade': dataInicioInatividade?.toIso8601String(),
-      'data_fim_inatividade': dataFimInatividade?.toIso8601String(),
+      'data_inicio_inatividade': dataInicioInatividade?.toIso8601String().split('T')[0],
+      'data_fim_inatividade': dataFimInatividade?.toIso8601String().split('T')[0],
       'motivo_inatividade': motivoInatividade,
     };
   }

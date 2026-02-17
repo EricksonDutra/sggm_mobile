@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:sggm/controllers/auth_controller.dart'; // ✅ ADICIONAR
 import 'package:sggm/controllers/musicas_controller.dart';
 import 'package:sggm/models/musicas.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -216,6 +217,10 @@ class _MusicasPageState extends State<MusicasPage> {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ NOVO: Obter permissão do usuário
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final isLider = auth.userData?['is_lider'] ?? false;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Repertório'),
@@ -228,38 +233,44 @@ class _MusicasPageState extends State<MusicasPage> {
           )
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _mostrarDialogoAdicionar(context),
-        tooltip: 'Adicionar Música',
-        child: const Icon(Icons.add),
-      ),
+
+      // ✅ Botão "+" - Só para líder/admin
+      floatingActionButton: isLider
+          ? FloatingActionButton(
+              onPressed: () => _mostrarDialogoAdicionar(context),
+              tooltip: 'Adicionar Música',
+              child: const Icon(Icons.add),
+            )
+          : null, // ✅ Músico comum não vê o botão
+
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Consumer<MusicasProvider>(
               builder: (context, provider, child) {
-                // ✅ CORREÇÃO: musicas em vez de musicos
                 if (provider.musicas.isEmpty) {
-                  return const Center(
+                  return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(
+                        const Icon(
                           Icons.music_note_outlined,
                           size: 64,
                           color: Colors.grey,
                         ),
-                        SizedBox(height: 16),
-                        Text(
+                        const SizedBox(height: 16),
+                        const Text(
                           'Nenhuma música cadastrada',
                           style: TextStyle(
                             fontSize: 18,
                             color: Colors.grey,
                           ),
                         ),
-                        SizedBox(height: 8),
+                        const SizedBox(height: 8),
+
+                        // ✅ Mensagem diferente por permissão
                         Text(
-                          'Toque no + para adicionar',
-                          style: TextStyle(
+                          isLider ? 'Toque no + para adicionar' : 'Aguarde o líder adicionar músicas',
+                          style: const TextStyle(
                             fontSize: 14,
                             color: Colors.grey,
                           ),
@@ -273,9 +284,9 @@ class _MusicasPageState extends State<MusicasPage> {
                   onRefresh: _carregarMusicas,
                   child: ListView.builder(
                     padding: const EdgeInsets.all(8),
-                    itemCount: provider.musicas.length, // ✅ CORREÇÃO
+                    itemCount: provider.musicas.length,
                     itemBuilder: (context, index) {
-                      final musica = provider.musicas[index]; // ✅ CORREÇÃO
+                      final musica = provider.musicas[index];
 
                       return Card(
                         elevation: 2,
@@ -316,41 +327,52 @@ class _MusicasPageState extends State<MusicasPage> {
                                 ),
                             ],
                           ),
-                          trailing: PopupMenuButton<String>(
-                            onSelected: (value) {
-                              if (value == 'cifra') {
-                                _abrirCifra(musica.linkCifra);
-                              } else if (value == 'excluir') {
-                                _confirmarExclusao(musica);
-                              }
-                            },
-                            itemBuilder: (context) => [
-                              if (musica.linkCifra != null && musica.linkCifra!.isNotEmpty)
-                                const PopupMenuItem(
-                                  value: 'cifra',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.open_in_browser, size: 18),
-                                      SizedBox(width: 8),
-                                      Text('Abrir Cifra'),
-                                    ],
-                                  ),
-                                ),
-                              const PopupMenuItem(
-                                value: 'excluir',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.delete_outline, size: 18, color: Colors.red),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      'Excluir',
-                                      style: TextStyle(color: Colors.red),
+
+                          // ✅ Menu de 3 pontos - Condicional
+                          trailing: isLider
+                              ? PopupMenuButton<String>(
+                                  onSelected: (value) {
+                                    if (value == 'cifra') {
+                                      _abrirCifra(musica.linkCifra);
+                                    } else if (value == 'excluir') {
+                                      _confirmarExclusao(musica);
+                                    }
+                                  },
+                                  itemBuilder: (context) => [
+                                    if (musica.linkCifra != null && musica.linkCifra!.isNotEmpty)
+                                      const PopupMenuItem(
+                                        value: 'cifra',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.open_in_browser, size: 18),
+                                            SizedBox(width: 8),
+                                            Text('Abrir Cifra'),
+                                          ],
+                                        ),
+                                      ),
+                                    const PopupMenuItem(
+                                      value: 'excluir',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                                          SizedBox(width: 8),
+                                          Text(
+                                            'Excluir',
+                                            style: TextStyle(color: Colors.red),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ],
-                                ),
-                              ),
-                            ],
-                          ),
+                                )
+                              : (musica.linkCifra != null && musica.linkCifra!.isNotEmpty)
+                                  ? IconButton(
+                                      icon: const Icon(Icons.open_in_browser, color: Colors.blue),
+                                      tooltip: 'Abrir Cifra',
+                                      onPressed: () => _abrirCifra(musica.linkCifra),
+                                    )
+                                  : null, // ✅ Sem cifra = sem botão
+
                           onTap: () => _abrirCifra(musica.linkCifra),
                         ),
                       );

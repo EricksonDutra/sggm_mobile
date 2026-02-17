@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:sggm/controllers/auth_controller.dart'; // ✅ ADICIONAR
 import 'package:sggm/models/instrumentos.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:sggm/controllers/eventos_controller.dart';
@@ -91,7 +92,7 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
     final musicas = eventoAtual.repertorio ?? [];
 
     StringBuffer sb = StringBuffer();
-    sb.writeln('*${eventoAtual.nome}*'); // Negrito no WhatsApp
+    sb.writeln('*${eventoAtual.nome}*');
     String dataFormatada = eventoAtual.dataEvento.split('T')[0].split('-').reversed.join('/');
     sb.writeln('🗓 $dataFormatada');
     sb.writeln('📍 ${eventoAtual.local}');
@@ -195,7 +196,6 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
                 width: double.maxFinite,
                 child: Consumer<MusicasProvider>(
                   builder: (context, provider, child) {
-                    // ✅ CORREÇÃO: musicas em vez de musicos
                     if (provider.musicas.isEmpty) {
                       return const Center(
                         child: Text('Nenhuma música cadastrada no repertório geral.'),
@@ -204,9 +204,9 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
 
                     return ListView.builder(
                       shrinkWrap: true,
-                      itemCount: provider.musicas.length, // ✅ CORREÇÃO
+                      itemCount: provider.musicas.length,
                       itemBuilder: (context, index) {
-                        final musica = provider.musicas[index]; // ✅ CORREÇÃO
+                        final musica = provider.musicas[index];
                         final estaSelecionado = selecionadas.contains(musica.id);
 
                         return CheckboxListTile(
@@ -269,7 +269,7 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
     final outroInstrumentoController = TextEditingController();
     final obsController = TextEditingController();
     int? selectedMusicoId;
-    int? selectedInstrumentoId; // ✅ Usar ID em vez de nome
+    int? selectedInstrumentoId;
     bool mostrarCampoOutro = false;
 
     showDialog(
@@ -283,7 +283,6 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Dropdown de Músicos
                     Consumer<MusicosProvider>(
                       builder: (context, provider, child) {
                         if (provider.musicos.isEmpty) {
@@ -307,7 +306,6 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
                             setStateDialog(() {
                               selectedMusicoId = v;
 
-                              // Auto-selecionar instrumento principal
                               if (v != null) {
                                 final musico = provider.musicos.firstWhere((m) => m.id == v);
                                 if (musico.instrumentoPrincipal != null) {
@@ -321,8 +319,6 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
                       },
                     ),
                     const SizedBox(height: 16),
-
-                    // Dropdown de Instrumentos
                     Consumer<InstrumentosProvider>(
                       builder: (context, provider, child) {
                         if (provider.instrumentos.isEmpty) {
@@ -345,7 +341,6 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
                           onChanged: (v) {
                             setStateDialog(() {
                               selectedInstrumentoId = v;
-                              // Se o nome for "Outro", mostrar campo
                               if (v != null) {
                                 final inst = provider.instrumentos.firstWhere((i) => i.id == v);
                                 mostrarCampoOutro = inst.nome.toLowerCase() == 'outro';
@@ -355,7 +350,6 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
                         );
                       },
                     ),
-
                     if (mostrarCampoOutro)
                       Padding(
                         padding: const EdgeInsets.only(top: 8.0),
@@ -367,7 +361,6 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
                           ),
                         ),
                       ),
-
                     const SizedBox(height: 8),
                     TextField(
                       controller: obsController,
@@ -397,7 +390,7 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
                     final nova = Escala(
                       musicoId: selectedMusicoId!,
                       eventoId: widget.evento.id!,
-                      instrumentoNoEvento: selectedInstrumentoId, // ✅ ID do instrumento
+                      instrumentoNoEvento: selectedInstrumentoId,
                       observacao: obsController.text.isEmpty ? null : obsController.text,
                     );
 
@@ -434,6 +427,10 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
       );
     }
 
+    // ✅ NOVO: Obter permissão do usuário
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final isLider = auth.userData?['is_lider'] ?? false;
+
     return Scaffold(
       appBar: AppBar(
         title: Column(
@@ -446,11 +443,13 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.send),
-            tooltip: 'Enviar Escala no Grupo',
-            onPressed: _enviarParaGrupoWhatsApp,
-          ),
+          // ✅ Só líder/admin pode enviar para grupo
+          if (isLider)
+            IconButton(
+              icon: const Icon(Icons.send),
+              tooltip: 'Enviar Escala no Grupo',
+              onPressed: _enviarParaGrupoWhatsApp,
+            ),
         ],
         bottom: TabBar(
           controller: _tabController,
@@ -465,7 +464,7 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
       body: TabBarView(
         controller: _tabController,
         children: [
-          // ABA SETLIST
+          // ========== ABA SETLIST ==========
           Consumer<EventoProvider>(
             builder: (context, provider, child) {
               final eventoAtual = provider.eventos.firstWhere(
@@ -510,22 +509,25 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
                             },
                           ),
                   ),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    color: Colors.grey[100],
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.edit_note),
-                      label: const Text('GERENCIAR MÚSICAS'),
-                      onPressed: () => _mostrarSelecaoMusicas(context, eventoAtual),
+
+                  // ✅ BOTÃO "GERENCIAR MÚSICAS" - Só para líder/admin
+                  if (isLider)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      color: Colors.grey[100],
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.edit_note),
+                        label: const Text('GERENCIAR MÚSICAS'),
+                        onPressed: () => _mostrarSelecaoMusicas(context, eventoAtual),
+                      ),
                     ),
-                  ),
                 ],
               );
             },
           ),
 
-          // ABA ESCALA
+          // ========== ABA ESCALA ==========
           Consumer<EscalasProvider>(
             builder: (context, provider, child) {
               final escalaDoCulto = provider.escalas.where((e) => e.eventoId == widget.evento.id).toList();
@@ -536,7 +538,12 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
                     const Center(child: Text('Ninguém escalado ainda.'))
                   else
                     ListView.builder(
-                      padding: const EdgeInsets.only(bottom: 80, top: 8, left: 8, right: 8),
+                      padding: EdgeInsets.only(
+                        bottom: isLider ? 80 : 8, // ✅ Espaço menor se não houver botão
+                        top: 8,
+                        left: 8,
+                        right: 8,
+                      ),
                       itemCount: escalaDoCulto.length,
                       itemBuilder: (context, index) {
                         final item = escalaDoCulto[index];
@@ -554,38 +561,45 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
                               style: const TextStyle(fontWeight: FontWeight.bold),
                             ),
                             subtitle: Text('Toca: $instrumentoNome'),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.send_to_mobile, color: Colors.green),
-                                  tooltip: 'Avisar no WhatsApp',
-                                  onPressed: () => _notificarMusico(item),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline, color: Colors.red),
-                                  onPressed: () {
-                                    if (item.id != null) {
-                                      provider.deletarEscala(item.id!);
-                                    }
-                                  },
-                                ),
-                              ],
-                            ),
+
+                            // ✅ Ações visíveis SÓ para líder/admin
+                            trailing: isLider
+                                ? Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.send_to_mobile, color: Colors.green),
+                                        tooltip: 'Avisar no WhatsApp',
+                                        onPressed: () => _notificarMusico(item),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                        onPressed: () {
+                                          if (item.id != null) {
+                                            provider.deletarEscala(item.id!);
+                                          }
+                                        },
+                                      ),
+                                    ],
+                                  )
+                                : null, // ✅ Músico comum não vê botões
                           ),
                         );
                       },
                     ),
-                  Positioned(
-                    bottom: 16,
-                    right: 16,
-                    child: FloatingActionButton.extended(
-                      onPressed: () => _adicionarMusicoNaEscala(context),
-                      icon: const Icon(Icons.person_add),
-                      label: const Text('Escalar'),
-                      backgroundColor: Colors.orangeAccent,
+
+                  // ✅ BOTÃO "ESCALAR" - Só para líder/admin
+                  if (isLider)
+                    Positioned(
+                      bottom: 16,
+                      right: 16,
+                      child: FloatingActionButton.extended(
+                        onPressed: () => _adicionarMusicoNaEscala(context),
+                        icon: const Icon(Icons.person_add),
+                        label: const Text('Escalar'),
+                        backgroundColor: Colors.orangeAccent,
+                      ),
                     ),
-                  ),
                 ],
               );
             },

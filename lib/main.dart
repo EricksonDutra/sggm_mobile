@@ -14,6 +14,8 @@ import 'package:sggm/services/token_migration_service.dart';
 import 'package:sggm/views/login_page.dart';
 import 'package:sggm/home_page.dart';
 import 'firebase_options.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:sggm/theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -90,7 +92,17 @@ class MyApp extends StatelessWidget {
           return MaterialApp(
             title: 'SGGM',
             debugShowCheckedModeBanner: false,
-            theme: _buildAppTheme(),
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [
+              Locale('pt', 'BR'), // Português do Brasil
+              Locale('en', 'US'), // Inglês (fallback)
+            ],
+            locale: const Locale('pt', 'BR'),
+            theme: AppTheme.darkTheme,
             // ✅ Navegação corrigida com base na autenticação
             routes: {
               '/': (context) => const LoginPage(),
@@ -100,50 +112,6 @@ class MyApp extends StatelessWidget {
             initialRoute: authProvider.isAuthenticated ? '/home' : '/',
           );
         },
-      ),
-    );
-  }
-
-  /// Construir tema da aplicação
-  ThemeData _buildAppTheme() {
-    return ThemeData(
-      useMaterial3: true,
-      brightness: Brightness.dark,
-      primarySwatch: Colors.deepPurple,
-      scaffoldBackgroundColor: const Color(0xFF121212),
-      appBarTheme: const AppBarTheme(
-        centerTitle: true,
-        elevation: 2,
-        backgroundColor: Color(0xFF1E1E1E),
-      ),
-      cardTheme: CardThemeData(
-        elevation: 2,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        color: const Color(0xFF1E1E1E),
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        filled: true,
-        fillColor: const Color(0xFF2A2A2A),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 12,
-        ),
-      ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 24,
-            vertical: 12,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
       ),
     );
   }

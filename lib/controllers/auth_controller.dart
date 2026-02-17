@@ -89,8 +89,16 @@ class AuthProvider extends ChangeNotifier {
         };
 
         // 🔐 Salvar credenciais de forma segura
-        await _secureTokenService.saveCredentials(_token!, _isLider);
+        await _secureTokenService.saveCredentials(
+          token: _token!,
+          isLider: _isLider,
+          musicoId: data['musico_id'] ?? 0, // ✅ NOVO
+          tipoUsuario: data['tipo_usuario'] ?? 'MUSICO', // ✅ NOVO
+        );
+
         print('✅ Login realizado: ${_userData!['nome']}');
+        print('👤 Tipo: ${_userData!['tipo_usuario']}');
+        print('👑 É líder: $_isLider');
 
         // 📤 Enviar token FCM ao backend
         await enviarFCMToken();
@@ -171,8 +179,21 @@ class AuthProvider extends ChangeNotifier {
       if (hasCredentials) {
         _token = await _secureTokenService.getToken();
         _isLider = await _secureTokenService.getIsLider();
+
+        final musicoId = await _secureTokenService.getMusicoId();
+        final tipoUsuario = await _secureTokenService.getTipoUsuario();
+
         _isAuthenticated = true;
+
+        // ✅ Reconstruir userData a partir do storage
+        _userData = {
+          'musico_id': musicoId,
+          'tipo_usuario': tipoUsuario,
+          'is_lider': _isLider,
+        };
         print('✅ Token JWT carregado do armazenamento seguro');
+        print('👤 Músico ID: $musicoId');
+        print('👤 Tipo: $tipoUsuario');
 
         // ✅ Reenviar FCM token apenas se autenticado
         await enviarFCMToken();

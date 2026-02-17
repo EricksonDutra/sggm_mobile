@@ -1,6 +1,7 @@
 import 'secure_token_service.dart';
 
 class TokenMigrationService {
+  // ignore: unused_field
   final SecureTokenService _secureTokenService;
 
   TokenMigrationService(this._secureTokenService);

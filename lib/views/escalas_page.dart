@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:sggm/controllers/auth_controller.dart'; // ✅ ADICIONAR
 import 'package:sggm/controllers/escalas_controller.dart';
 import 'package:sggm/controllers/eventos_controller.dart';
 import 'package:sggm/controllers/instrumentos_controller.dart';
@@ -86,14 +87,12 @@ class _EscalasPageState extends State<EscalasPage> {
                             setStateDialog(() {
                               selectedMusicoId = valor;
 
-                              // LÓGICA DE AUTO-SELEÇÃO COM DADOS DO BANCO
                               if (valor != null) {
                                 final musico = provider.musicos.firstWhere((m) => m.id == valor);
                                 final instProvider = Provider.of<InstrumentosProvider>(context, listen: false);
 
                                 if (musico.instrumentoPrincipal != null &&
                                     musico.instrumentoPrincipal.toString().isNotEmpty) {
-                                  // Verifica se o instrumento do músico existe na lista do banco
                                   bool existeNaLista = instProvider.instrumentos
                                       .any((i) => i.nome == musico.instrumentoPrincipal.toString());
 
@@ -101,7 +100,6 @@ class _EscalasPageState extends State<EscalasPage> {
                                     selectedInstrumento = musico.instrumentoPrincipal.toString();
                                     mostrarCampoOutro = false;
                                   } else {
-                                    // Se não existe na lista, vai para "Outro"
                                     selectedInstrumento = 'Outro';
                                     mostrarCampoOutro = true;
                                     outroInstrumentoController.text = musico.instrumentoPrincipal.toString();
@@ -133,10 +131,9 @@ class _EscalasPageState extends State<EscalasPage> {
                     ),
                     const SizedBox(height: 10),
 
-                    // --- INSTRUMENTOS (VINDOS DO BANCO) ---
+                    // --- INSTRUMENTOS ---
                     Consumer<InstrumentosProvider>(
                       builder: (context, provider, child) {
-                        // Cria a lista de opções adicionando "Outro" no final
                         var listaOpcoes = provider.instrumentos.map((i) => i.nome).toList();
                         listaOpcoes.add('Outro');
 
@@ -181,7 +178,6 @@ class _EscalasPageState extends State<EscalasPage> {
                 TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancelar')),
                 ElevatedButton(
                   onPressed: () {
-                    // (Mesma lógica de salvamento anterior...)
                     if (selectedMusicoId == null || selectedEventoId == null || selectedInstrumento == null) {
                       ScaffoldMessenger.of(context)
                           .showSnackBar(const SnackBar(content: Text('Preencha os campos obrigatórios!')));
@@ -197,8 +193,7 @@ class _EscalasPageState extends State<EscalasPage> {
                             .showSnackBar(const SnackBar(content: Text('Digite o instrumento!')));
                         return;
                       }
-                      // Se for "Outro", talvez precise criar um novo instrumento ou lidar de outra forma.
-                      instrumentoIdFinal = null; // ou lógica para criar/obter o id do novo instrumento
+                      instrumentoIdFinal = null;
                     } else {
                       final instProvider = Provider.of<InstrumentosProvider>(context, listen: false);
                       final instrumento = instProvider.instrumentos.firstWhere(
@@ -231,26 +226,57 @@ class _EscalasPageState extends State<EscalasPage> {
     );
   }
 
-  // Build e resto da classe continuam iguais...
   @override
   Widget build(BuildContext context) {
-    // ... (código do build igual ao anterior)
+    // ✅ NOVO: Obter permissão do usuário
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final isLider = auth.userData?['is_lider'] ?? false;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Escalas'),
         centerTitle: true,
         actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _carregarTudo)],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _mostrarDialogoAdicionar(context),
-        child: const Icon(Icons.add_link),
-      ),
+
+      // ✅ Botão "+" - Só para líder/admin
+      floatingActionButton: isLider
+          ? FloatingActionButton(
+              onPressed: () => _mostrarDialogoAdicionar(context),
+              tooltip: 'Criar Escala',
+              child: const Icon(Icons.add_link),
+            )
+          : null, // ✅ Músico comum não vê
+
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Consumer<EscalasProvider>(
               builder: (context, provider, child) {
                 if (provider.escalas.isEmpty) {
-                  return const Center(child: Text('Nenhuma escala registrada.'));
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.event_busy,
+                          size: 64,
+                          color: Colors.grey,
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Nenhuma escala registrada',
+                          style: TextStyle(fontSize: 18, color: Colors.grey),
+                        ),
+                        const SizedBox(height: 8),
+
+                        // ✅ Mensagem diferente por permissão
+                        Text(
+                          isLider ? 'Toque no + para criar uma escala' : 'Aguarde ser escalado pelo líder',
+                          style: const TextStyle(fontSize: 14, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  );
                 }
 
                 return RefreshIndicator(
@@ -279,18 +305,50 @@ class _EscalasPageState extends State<EscalasPage> {
                               if (escala.instrumentoNoEvento.toString().isNotEmpty)
                                 Text(
                                   'Tocando: ${escala.instrumentoNoEvento}',
-                                  style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w500),
+                                  style: const TextStyle(
+                                    color: Colors.black87,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
                             ],
                           ),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete_outline, color: Colors.red),
-                            onPressed: () {
-                              if (escala.id != null) {
-                                provider.deletarEscala(escala.id!);
-                              }
-                            },
-                          ),
+
+                          // ✅ Botão de deletar - Só para líder/admin
+                          trailing: isLider
+                              ? IconButton(
+                                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                  onPressed: () {
+                                    // ✅ Confirmação antes de deletar
+                                    showDialog(
+                                      context: context,
+                                      builder: (ctx) => AlertDialog(
+                                        title: const Text('Confirmar Exclusão'),
+                                        content: Text(
+                                          'Deseja remover ${escala.musicoNome ?? "este músico"} da escala?',
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(ctx),
+                                            child: const Text('Cancelar'),
+                                          ),
+                                          ElevatedButton(
+                                            onPressed: () {
+                                              Navigator.pop(ctx);
+                                              if (escala.id != null) {
+                                                provider.deletarEscala(escala.id!);
+                                              }
+                                            },
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.red,
+                                            ),
+                                            child: const Text('Excluir'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                )
+                              : null, // ✅ Músico comum não vê botão
                         ),
                       );
                     },

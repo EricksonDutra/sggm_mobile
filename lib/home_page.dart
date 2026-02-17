@@ -1,43 +1,158 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sggm/controllers/auth_controller.dart';
+import 'package:sggm/controllers/musicos_controller.dart';
 import 'package:sggm/views/eventos_page.dart';
 import 'package:sggm/views/musicos_page.dart';
 import 'package:sggm/views/escalas_page.dart';
 import 'package:sggm/views/musicas_page.dart';
 import 'package:sggm/views/login_page.dart';
+import 'package:sggm/views/perfil_edit_page.dart';
+import 'package:sggm/views/mudar_senha_page.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
+  // ✅ MANTIDO: Navegar para o próprio perfil
+  void _abrirMeuPerfil(BuildContext context) async {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final musicosProvider = Provider.of<MusicosProvider>(context, listen: false);
+    final musicoId = auth.userData?['musico_id'];
+
+    if (musicoId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('ID do músico não encontrado'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Mostrar loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Center(child: CircularProgressIndicator()),
+    );
+
+    // Buscar dados do músico
+    await musicosProvider.listarMusicos();
+
+    if (!context.mounted) return;
+    Navigator.pop(context); // Fechar loading
+
+    // Encontrar o músico na lista
+    final musico = musicosProvider.musicos.firstWhere(
+      (m) => m.id == musicoId,
+      orElse: () => throw Exception('Músico não encontrado'),
+    );
+
+    // Navegar para edição
+    final resultado = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PerfilEditPage(
+          musico: musico,
+          isOwnProfile: true,
+        ),
+      ),
+    );
+
+    // Recarregar dados se houve alteração
+    if (resultado == true) {
+      await musicosProvider.listarMusicos();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final authProvider = Provider.of<AuthProvider>(context);
-    // Tenta pegar o nome do usuário do token ou usa um padrão
-    // (Dependendo de como você decodifica o token, aqui é um exemplo simples)
-    const nomeUsuario = "Líder";
-
     return Scaffold(
-      // Fundo preto sólido para combinar com o tema dark
       backgroundColor: const Color(0xFF121212),
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title:
-            const Text('SGGM', style: TextStyle(fontFamily: 'Serif', fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+        title: const Text(
+          'SGGM',
+          style: TextStyle(
+            fontFamily: 'Serif',
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.5,
+          ),
+        ),
         centerTitle: true,
-        backgroundColor: Colors.transparent, // AppBar transparente
+        backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.white70),
-            tooltip: 'Sair',
-            onPressed: () {
-              Provider.of<AuthProvider>(context, listen: false).logout();
-              Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(builder: (context) => const LoginPage()),
-                (route) => false,
-              );
+          // ✅ ATUALIZADO: PopupMenu com mais opções
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: Colors.white70),
+            tooltip: 'Opções',
+            offset: const Offset(0, 50),
+            color: const Color(0xFF1E1E1E),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: const BorderSide(color: Colors.white24),
+            ),
+            onSelected: (value) {
+              if (value == 'perfil') {
+                _abrirMeuPerfil(context);
+              } else if (value == 'senha') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const MudarSenhaPage(),
+                  ),
+                );
+              } else if (value == 'logout') {
+                Provider.of<AuthProvider>(context, listen: false).logout();
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (context) => const LoginPage()),
+                  (route) => false,
+                );
+              }
             },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'perfil',
+                child: Row(
+                  children: [
+                    Icon(Icons.account_circle, color: Colors.white70, size: 20),
+                    SizedBox(width: 12),
+                    Text(
+                      'Meu Perfil',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'senha',
+                child: Row(
+                  children: [
+                    Icon(Icons.lock_reset, color: Colors.white70, size: 20),
+                    SizedBox(width: 12),
+                    Text(
+                      'Mudar Senha',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.logout, color: Colors.red, size: 20),
+                    SizedBox(width: 12),
+                    Text(
+                      'Sair',
+                      style: TextStyle(color: Colors.red),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -52,8 +167,6 @@ class HomePage extends StatelessWidget {
               ),
             ),
           ),
-
-          // 2. CONTEÚDO PRINCIPAL
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10),
@@ -61,33 +174,79 @@ class HomePage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 20),
-                  // Cabeçalho de Boas Vindas
-                  const Text(
-                    'Olá, $nomeUsuario',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w300,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const Text(
-                    'IPB Ponta Porã',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.white54,
-                      letterSpacing: 1.2,
-                    ),
+
+                  // ✅ MANTIDO: Consumer com nome e badge
+                  Consumer<AuthProvider>(
+                    builder: (context, auth, child) {
+                      final nome = auth.userData?['nome'] ?? 'Usuário';
+                      final tipoUsuario = auth.userData?['tipo_usuario'] ?? '';
+
+                      String badge = '';
+                      if (tipoUsuario == 'ADMIN') {
+                        badge = '👑 Admin';
+                      } else if (tipoUsuario == 'LIDER') {
+                        badge = '⭐ Líder';
+                      }
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Olá, $nome',
+                                  style: const TextStyle(
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.w300,
+                                    color: Colors.white,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (badge.isNotEmpty)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: tipoUsuario == 'ADMIN' ? Colors.amber.shade900 : Colors.deepPurple.shade700,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    badge,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const Text(
+                            'IPB Ponta Porã',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.white54,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
 
                   const SizedBox(height: 40),
 
-                  // Grid de Menu
+                  // ✅ MANTIDO: Grid de Menu
                   Expanded(
                     child: GridView.count(
                       crossAxisCount: 2,
                       crossAxisSpacing: 15,
                       mainAxisSpacing: 15,
-                      childAspectRatio: 1.1, // Ajusta a altura dos cartões
+                      childAspectRatio: 1.1,
                       children: [
                         _buildDarkCard(
                           context,
@@ -125,7 +284,6 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  // Widget customizado para os Cartões Dark
   Widget _buildDarkCard(
     BuildContext context, {
     required String title,
@@ -144,10 +302,10 @@ class HomePage extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         child: Container(
           decoration: BoxDecoration(
-            color: const Color(0xFF1E1E1E), // Cinza bem escuro (Surface color)
+            color: const Color(0xFF1E1E1E),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: Colors.white24, // Borda fina e discreta igual ao login
+              color: Colors.white24,
               width: 1,
             ),
             boxShadow: [
@@ -161,7 +319,7 @@ class HomePage extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 40, color: Colors.white), // Ícone branco
+              Icon(icon, size: 40, color: Colors.white),
               const SizedBox(height: 15),
               Text(
                 title,
