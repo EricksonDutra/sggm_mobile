@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:sggm/controllers/auth_controller.dart'; // ✅ ADICIONAR
+import 'package:sggm/controllers/auth_controller.dart';
 import 'package:sggm/controllers/musicas_controller.dart';
+import 'package:sggm/models/artista.dart';
 import 'package:sggm/models/musicas.dart';
+import 'package:sggm/views/widgets/artista_selector_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class MusicasPage extends StatefulWidget {
@@ -45,103 +47,145 @@ class _MusicasPageState extends State<MusicasPage> {
 
   void _mostrarDialogoAdicionar(BuildContext context) {
     final tituloController = TextEditingController();
-    final artistaController = TextEditingController();
     final tomController = TextEditingController();
     final linkCifraController = TextEditingController();
+    final linkYoutubeController = TextEditingController();
+    Artista? artistaSelecionado;
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Nova Música'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Row(
             children: [
-              TextField(
-                controller: tituloController,
-                decoration: const InputDecoration(
-                  labelText: 'Título *',
-                  border: OutlineInputBorder(),
-                ),
-                textCapitalization: TextCapitalization.words,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: artistaController,
-                decoration: const InputDecoration(
-                  labelText: 'Artista/Banda *',
-                  border: OutlineInputBorder(),
-                ),
-                textCapitalization: TextCapitalization.words,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: tomController,
-                decoration: const InputDecoration(
-                  labelText: 'Tom (Ex: G, Cm)',
-                  border: OutlineInputBorder(),
-                  hintText: 'C, D, Em, F#m...',
-                ),
-                textCapitalization: TextCapitalization.characters,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: linkCifraController,
-                decoration: const InputDecoration(
-                  labelText: 'Link Cifra (Opcional)',
-                  border: OutlineInputBorder(),
-                  hintText: 'https://...',
-                ),
-                keyboardType: TextInputType.url,
-              ),
+              Icon(Icons.music_note),
+              SizedBox(width: 8),
+              Text('Nova Música'),
             ],
           ),
+          content: SingleChildScrollView(
+            child: SizedBox(
+              width: double.maxFinite,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: tituloController,
+                    decoration: const InputDecoration(
+                      labelText: 'Título *',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.title),
+                    ),
+                    textCapitalization: TextCapitalization.words,
+                  ),
+                  const SizedBox(height: 16),
+
+                  // ✅ CORRIGIDO: Sem espaço antes do parêntese
+                  ArtistaSelectorWidget(
+                    onArtistaSelected: (artista) {
+                      setDialogState(() {
+                        artistaSelecionado = artista;
+                      });
+                    },
+                  ),
+
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: tomController,
+                    decoration: const InputDecoration(
+                      labelText: 'Tom (Ex: G, Cm)',
+                      border: OutlineInputBorder(),
+                      hintText: 'C, D, Em, F#m...',
+                      prefixIcon: Icon(Icons.music_video),
+                    ),
+                    textCapitalization: TextCapitalization.characters,
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: linkCifraController,
+                    decoration: const InputDecoration(
+                      labelText: 'Link Cifra (Opcional)',
+                      border: OutlineInputBorder(),
+                      hintText: 'https://...',
+                      prefixIcon: Icon(Icons.link),
+                    ),
+                    keyboardType: TextInputType.url,
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: linkYoutubeController,
+                    decoration: const InputDecoration(
+                      labelText: 'Link YouTube (Opcional)',
+                      border: OutlineInputBorder(),
+                      hintText: 'https://youtube.com/...',
+                      prefixIcon: Icon(Icons.video_library),
+                    ),
+                    keyboardType: TextInputType.url,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.check),
+              label: const Text('Salvar'),
+              onPressed: () {
+                if (tituloController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Título é obrigatório!'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                  return;
+                }
+
+                if (artistaSelecionado == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Selecione um artista!'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                  return;
+                }
+
+                final novaMusica = Musica(
+                  id: 0,
+                  titulo: tituloController.text.trim(),
+                  artistaId: artistaSelecionado!.id,
+                  artistaNome: artistaSelecionado!.nome,
+                  tom: tomController.text.trim().isEmpty ? null : tomController.text.trim(),
+                  linkCifra: linkCifraController.text.trim().isEmpty ? null : linkCifraController.text.trim(),
+                  linkYoutube: linkYoutubeController.text.trim().isEmpty ? null : linkYoutubeController.text.trim(),
+                );
+
+                Provider.of<MusicasProvider>(context, listen: false).adicionarMusica(novaMusica).then((_) {
+                  Navigator.of(ctx).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Música "${novaMusica.titulo}" adicionada!'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }).catchError((e) {
+                  Navigator.of(ctx).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Erro ao adicionar: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                });
+              },
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (tituloController.text.trim().isEmpty || artistaController.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Título e Artista são obrigatórios!'),
-                    backgroundColor: Colors.orange,
-                  ),
-                );
-                return;
-              }
-
-              final novaMusica = Musica(
-                titulo: tituloController.text.trim(),
-                artista: artistaController.text.trim(),
-                tom: tomController.text.trim().isEmpty ? null : tomController.text.trim(),
-                linkCifra: linkCifraController.text.trim().isEmpty ? null : linkCifraController.text.trim(),
-              );
-
-              Provider.of<MusicasProvider>(context, listen: false).adicionarMusica(novaMusica).then((_) {
-                Navigator.of(ctx).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Música adicionada com sucesso!'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              }).catchError((e) {
-                Navigator.of(ctx).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Erro ao adicionar: $e'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              });
-            },
-            child: const Text('Salvar'),
-          ),
-        ],
       ),
     );
   }
@@ -177,7 +221,7 @@ class _MusicasPageState extends State<MusicasPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Confirmar Exclusão'),
-        content: Text('Deseja realmente excluir "${musica.titulo}"?'),
+        content: Text('Deseja realmente excluir "${musica.titulo}" de ${musica.artistaNome}?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
@@ -186,23 +230,21 @@ class _MusicasPageState extends State<MusicasPage> {
           ElevatedButton(
             onPressed: () {
               Navigator.of(ctx).pop();
-              if (musica.id != null) {
-                Provider.of<MusicasProvider>(context, listen: false).deletarMusica(musica.id!).then((_) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Música excluída com sucesso!'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                }).catchError((e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Erro ao excluir: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                });
-              }
+              Provider.of<MusicasProvider>(context, listen: false).deletarMusica(musica.id!).then((_) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Música excluída com sucesso!'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              }).catchError((e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Erro ao excluir: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              });
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
@@ -217,7 +259,6 @@ class _MusicasPageState extends State<MusicasPage> {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ NOVO: Obter permissão do usuário
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final isLider = auth.userData?['is_lider'] ?? false;
 
@@ -233,16 +274,13 @@ class _MusicasPageState extends State<MusicasPage> {
           )
         ],
       ),
-
-      // ✅ Botão "+" - Só para líder/admin
       floatingActionButton: isLider
           ? FloatingActionButton(
               onPressed: () => _mostrarDialogoAdicionar(context),
               tooltip: 'Adicionar Música',
               child: const Icon(Icons.add),
             )
-          : null, // ✅ Músico comum não vê o botão
-
+          : null,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Consumer<MusicasProvider>(
@@ -266,8 +304,6 @@ class _MusicasPageState extends State<MusicasPage> {
                           ),
                         ),
                         const SizedBox(height: 8),
-
-                        // ✅ Mensagem diferente por permissão
                         Text(
                           isLider ? 'Toque no + para adicionar' : 'Aguarde o líder adicionar músicas',
                           style: const TextStyle(
@@ -310,7 +346,7 @@ class _MusicasPageState extends State<MusicasPage> {
                           subtitle: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(musica.artista),
+                              Text(musica.artistaNome),
                               if (musica.linkCifra != null && musica.linkCifra!.isNotEmpty)
                                 const Row(
                                   children: [
@@ -327,8 +363,6 @@ class _MusicasPageState extends State<MusicasPage> {
                                 ),
                             ],
                           ),
-
-                          // ✅ Menu de 3 pontos - Condicional
                           trailing: isLider
                               ? PopupMenuButton<String>(
                                   onSelected: (value) {
@@ -371,8 +405,7 @@ class _MusicasPageState extends State<MusicasPage> {
                                       tooltip: 'Abrir Cifra',
                                       onPressed: () => _abrirCifra(musica.linkCifra),
                                     )
-                                  : null, // ✅ Sem cifra = sem botão
-
+                                  : null,
                           onTap: () => _abrirCifra(musica.linkCifra),
                         ),
                       );
