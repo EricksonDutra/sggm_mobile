@@ -52,7 +52,7 @@ class MusicasProvider extends ChangeNotifier {
         print('✅ ${_musicas.length} músicas carregadas');
 
         for (var musica in _musicas) {
-          print('   🎵 ${musica.titulo} - ${musica.artista}');
+          print('   🎵 ${musica.titulo} - ${musica.artistaNome}');
         }
 
         notifyListeners();
@@ -248,7 +248,7 @@ class MusicasProvider extends ChangeNotifier {
 
     final queryLower = query.toLowerCase();
     return _musicas.where((musica) {
-      return musica.titulo.toLowerCase().contains(queryLower) || musica.artista.toLowerCase().contains(queryLower);
+      return musica.titulo.toLowerCase().contains(queryLower) || musica.artistaNome.toLowerCase().contains(queryLower);
     }).toList();
   }
 

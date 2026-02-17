@@ -115,7 +115,7 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
     } else {
       for (var i = 0; i < musicas.length; i++) {
         var m = musicas[i];
-        sb.writeln('${i + 1}. ${m.titulo} - ${m.artista} [${m.tom ?? "?"}]');
+        sb.writeln('${i + 1}. ${m.titulo} - ${m.artistaNome} [${m.tom ?? "?"}]');
       }
     }
 
@@ -214,7 +214,7 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
                             musica.titulo,
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
-                          subtitle: Text('${musica.artista} • Tom: ${musica.tom ?? "?"}'),
+                          subtitle: Text('${musica.artistaNome} • Tom: ${musica.tom ?? "?"}'),
                           value: estaSelecionado,
                           activeColor: Colors.teal,
                           onChanged: (bool? value) {
@@ -502,7 +502,7 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
                                     musica.titulo,
                                     style: const TextStyle(fontWeight: FontWeight.bold),
                                   ),
-                                  subtitle: Text(musica.artista),
+                                  subtitle: Text(musica.artistaNome),
                                   trailing: const Icon(Icons.check_circle, color: Colors.green),
                                 ),
                               );
