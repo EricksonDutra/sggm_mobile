@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.sggm"
+    namespace = "com.ericksondutra.sggm"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -23,7 +23,7 @@ android {
 
     defaultConfig {
         // TODO: Especifique seu Application ID único
-        applicationId = "com.example.sggm"
+        applicationId = "com.ericksondutra.sggm"
         
         // Você pode atualizar os valores abaixo conforme necessário
         minSdk = flutter.minSdkVersion
