@@ -292,6 +292,62 @@ class EscalasProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> confirmarPresenca(int escalaId, bool confirmado) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      print('📤 ${confirmado ? "Confirmando" : "Desconfirmando"} escala $escalaId...');
+
+      final response = await ApiService.post(
+        '$apiUrl$escalaId/confirmar/',
+        body: {'confirmado': confirmado},
+      );
+
+      print('📡 Status: ${response.statusCode}');
+      print('✅ Resposta: ${response.data}');
+
+      if (response.statusCode! >= 200 && response.statusCode! <= 299) {
+        // Atualizar escala localmente
+        final index = _escalas.indexWhere((e) => e.id == escalaId);
+        if (index != -1) {
+          // Criar nova instância com confirmado atualizado
+          final escalaAtual = _escalas[index];
+          _escalas[index] = Escala(
+              id: escalaAtual.id,
+              musicoNome: escalaAtual.musicoNome,
+              musicoId: escalaAtual.musicoId,
+              eventoNome: escalaAtual.eventoNome,
+              instrumentoNoEvento: escalaAtual.instrumentoNoEvento,
+              confirmado: confirmado,
+              criadoEm: escalaAtual.criadoEm,
+              eventoId: escalaAtual.eventoId);
+
+          print('✅ Escala $escalaId ${confirmado ? "confirmada" : "desconfirmada"} localmente');
+        }
+
+        notifyListeners();
+      } else {
+        _errorMessage = 'Erro ao confirmar presença: ${response.data}';
+        throw Exception(_errorMessage);
+      }
+    } on DioException catch (e) {
+      _errorMessage = 'Erro ao confirmar presença: ${e.message}';
+      print('❌ $_errorMessage');
+      print('📝 Response: ${e.response?.data}');
+      rethrow;
+    } catch (e, stackTrace) {
+      _errorMessage = 'Erro ao confirmar presença: $e';
+      print('❌ $_errorMessage');
+      print('📍 $stackTrace');
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   /// Limpar mensagem de erro
   void limparErro() {
     _errorMessage = null;
