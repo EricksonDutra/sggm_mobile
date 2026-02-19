@@ -26,6 +26,8 @@ dependencies:
   local_auth_android: ^1.0.44
   local_auth_darwin: ^1.4.1
   local_auth_windows: ^1.0.11
+  youtube_player_flutter: ^9.0.3
+  webview_flutter: ^4.9.0
 
 dev_dependencies:
   flutter_test:
