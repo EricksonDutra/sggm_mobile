@@ -44,47 +44,148 @@ class _EventosPageState extends State<EventosPage> {
     }
   }
 
-  // Função auxiliar para exibir um formulário simples de adição (para teste rápido)
   void _mostrarDialogoAdicionar(BuildContext context) {
-    final nomeController = TextEditingController();
-    final localController = TextEditingController();
-    final dataController = TextEditingController(text: DateTime.now().toIso8601String());
+    final nomeController = TextEditingController(text: 'Culto');
+    final localController = TextEditingController(text: 'IPB Ponta Porã');
+    DateTime dataSelecionada = DateTime.now();
+    TimeOfDay horarioSelecionado = TimeOfDay.now();
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Novo Evento'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: nomeController, decoration: const InputDecoration(labelText: 'Nome')),
-            TextField(controller: localController, decoration: const InputDecoration(labelText: 'Local')),
-            TextField(controller: dataController, decoration: const InputDecoration(labelText: 'Data (ISO)')),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Novo Evento'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                    controller: nomeController,
+                    decoration: const InputDecoration(
+                      labelText: 'Nome',
+                      border: OutlineInputBorder(),
+                    )),
+                const SizedBox(height: 12),
+                TextField(
+                    controller: localController,
+                    decoration: const InputDecoration(
+                      labelText: 'Local',
+                      border: OutlineInputBorder(),
+                    )),
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: () async {
+                    final DateTime? picked = await showDatePicker(
+                      context: context,
+                      initialDate: dataSelecionada,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2030),
+                      locale: const Locale('pt', 'BR'),
+                      helpText: 'Selecione a data do evento',
+                      cancelText: 'Cancelar',
+                      confirmText: 'Confirmar',
+                    );
+
+                    if (picked != null && picked != dataSelecionada) {
+                      setState(() {
+                        dataSelecionada = picked;
+                      });
+                    }
+                  },
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Data do Evento',
+                      border: OutlineInputBorder(),
+                      suffixIcon: Icon(Icons.calendar_today),
+                    ),
+                    child: Text(
+                      '${dataSelecionada.day.toString().padLeft(2, '0')}/${dataSelecionada.month.toString().padLeft(2, '0')}/${dataSelecionada.year}',
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: () async {
+                    final TimeOfDay? picked = await showTimePicker(
+                      context: context,
+                      initialTime: horarioSelecionado,
+                      helpText: 'Selecione o horário',
+                      cancelText: 'Cancelar',
+                      confirmText: 'Confirmar',
+                    );
+
+                    if (picked != null) {
+                      setState(() {
+                        horarioSelecionado = picked;
+                      });
+                    }
+                  },
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Horário',
+                      border: OutlineInputBorder(),
+                      suffixIcon: Icon(Icons.access_time),
+                    ),
+                    child: Text(
+                      '${horarioSelecionado.hour.toString().padLeft(2, '0')}:${horarioSelecionado.minute.toString().padLeft(2, '0')}',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancelar')),
+            ElevatedButton(
+              onPressed: () {
+                if (nomeController.text.isEmpty || localController.text.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Preencha todos os campos'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                  return;
+                }
+
+                // Ao salvar, combine data e horário:
+                final dataComHorario = DateTime(
+                  dataSelecionada.year,
+                  dataSelecionada.month,
+                  dataSelecionada.day,
+                  horarioSelecionado.hour,
+                  horarioSelecionado.minute,
+                );
+                final String dataISO = dataComHorario.toIso8601String();
+
+                // Converte para ISO 8601 para enviar ao backend
+                final novoEvento = Evento(
+                  nome: nomeController.text,
+                  local: localController.text,
+                  dataEvento: dataISO,
+                  descricao: 'Criado via App',
+                );
+
+                // Chama o provider para salvar no Django
+                Provider.of<EventoProvider>(context, listen: false).adicionarEvento(novoEvento).then((_) {
+                  Navigator.of(ctx).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Evento criado com sucesso!'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }).catchError((e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Erro: $e')),
+                  );
+                });
+              },
+              child: const Text('Salvar'),
+            ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancelar')),
-          ElevatedButton(
-            onPressed: () {
-              String dataFinal = dataController.text;
-              final novoEvento = Evento(
-                nome: nomeController.text,
-                local: localController.text,
-                dataEvento: dataFinal,
-                descricao: 'Criado via App',
-              );
-
-              // Chama o provider para salvar no Django
-              Provider.of<EventoProvider>(context, listen: false)
-                  .adicionarEvento(novoEvento)
-                  .then((_) => Navigator.of(ctx).pop())
-                  .catchError((e) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e')));
-              });
-            },
-            child: const Text('Salvar'),
-          ),
-        ],
       ),
     );
   }
