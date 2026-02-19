@@ -9,6 +9,8 @@
         android:name="${applicationName}"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher">
+
+        <uses-library android:name="org.apache.http.legacy" android:required="false"/>
         
         <!-- ✅ APENAS UMA activity MainActivity -->
         <activity

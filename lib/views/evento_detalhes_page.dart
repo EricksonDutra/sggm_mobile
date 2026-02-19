@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sggm/controllers/auth_controller.dart'; // ✅ ADICIONAR
 import 'package:sggm/models/instrumentos.dart';
+import 'package:sggm/views/musica_detalhes_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:sggm/controllers/eventos_controller.dart';
 import 'package:sggm/controllers/escalas_controller.dart';
@@ -503,7 +504,26 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
                                     style: const TextStyle(fontWeight: FontWeight.bold),
                                   ),
                                   subtitle: Text(musica.artistaNome),
-                                  trailing: const Icon(Icons.check_circle, color: Colors.green),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (musica.linkYoutube != null && musica.linkYoutube!.isNotEmpty)
+                                        const Icon(Icons.play_circle, color: Colors.red, size: 20),
+                                      const SizedBox(width: 4),
+                                      if (musica.linkCifra != null && musica.linkCifra!.isNotEmpty)
+                                        const Icon(Icons.music_note, color: Colors.blue, size: 20),
+                                      const SizedBox(width: 8),
+                                      const Icon(Icons.arrow_forward_ios, size: 16),
+                                    ],
+                                  ),
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => MusicaDetalhesPage(musica: musica),
+                                      ),
+                                    );
+                                  },
                                 ),
                               );
                             },
@@ -515,7 +535,6 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
-                      color: Colors.grey[100],
                       child: ElevatedButton.icon(
                         icon: const Icon(Icons.edit_note),
                         label: const Text('GERENCIAR MÚSICAS'),
