@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Flutter Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar Flutter 3.24.4
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.4'
+          channel: 'stable'
+          cache: true
+
+      - name: Instalar dependências
+        run: flutter pub get
+
+      - name: Analisar código (lint)
+        run: flutter analyze --fatal-infos
+
+      - name: Rodar testes unitários com cobertura
+        run: flutter test --coverage
+
+      - name: Instalar lcov
+        run: sudo apt-get install -y lcov
+
+      - name: Verificar cobertura mínima (60%)
+        run: |
+          COVERAGE=$(lcov --summary coverage/lcov.info 2>&1 \
+            | grep -oP '\d+\.\d+(?=%)' | head -1)
+          echo "Cobertura atual: ${COVERAGE}%"
+          if [ -z "$COVERAGE" ]; then
+            echo "❌ Não foi possível calcular a cobertura"
+            exit 1
+          fi
+          if (( $(echo "$COVERAGE < 60" | bc -l) )); then
+            echo "❌ Cobertura abaixo de 60% (${COVERAGE}%)"
+            exit 1
+          fi
+          echo "✅ Cobertura OK: ${COVERAGE}%"
+
+      - name: Upload relatório de cobertura
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/lcov.info
