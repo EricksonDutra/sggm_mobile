@@ -7,6 +7,7 @@ import 'package:sggm/controllers/instrumentos_controller.dart';
 import 'package:sggm/controllers/musicos_controller.dart';
 import 'package:sggm/models/escalas.dart';
 import 'package:sggm/models/instrumentos.dart';
+import 'package:sggm/views/widgets/dialogs/confirm_delete_dialog.dart';
 import 'package:sggm/views/widgets/loading/shimmer_card.dart';
 
 class EscalasPage extends StatefulWidget {
@@ -418,48 +419,35 @@ class _EscalasPageState extends State<EscalasPage> {
     );
   }
 
-  void _confirmarDelecao(BuildContext context, Escala escala) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Confirmar Exclusão'),
-        content: Text('Deseja remover ${escala.musicoNome ?? "este músico"} da escala?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              if (escala.id == null) return;
-              try {
-                await context.read<EscalasProvider>().deletarEscala(escala.id!);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Escala removida com sucesso'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Erro ao remover escala'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Excluir'),
-          ),
-        ],
-      ),
+  void _confirmarDelecao(BuildContext context, Escala escala) async {
+    final confirmed = await ConfirmDeleteDialog.show(
+      context,
+      entityName: escala.musicoNome ?? 'este músico',
+      message: 'Deseja remover ${escala.musicoNome ?? "este músico"} da escala?\nEsta ação não pode ser desfeita.',
     );
+
+    if (confirmed && context.mounted && escala.id != null) {
+      try {
+        await context.read<EscalasProvider>().deletarEscala(escala.id!);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Escala removida com sucesso'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Erro ao remover escala'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
   }
 
   @override

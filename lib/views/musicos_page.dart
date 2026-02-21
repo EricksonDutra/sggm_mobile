@@ -5,6 +5,7 @@ import 'package:sggm/controllers/instrumentos_controller.dart';
 import 'package:sggm/controllers/musicos_controller.dart';
 import 'package:sggm/models/musicos.dart';
 import 'package:sggm/views/perfil_edit_page.dart';
+import 'package:sggm/views/widgets/dialogs/confirm_delete_dialog.dart';
 import 'package:sggm/views/widgets/loading/loading_overlay.dart';
 import 'package:sggm/views/widgets/loading/shimmer_list_tile.dart';
 
@@ -312,47 +313,34 @@ class _MusicosPageState extends State<MusicosPage> {
     }
   }
 
-  void _confirmarExclusao(Musico musico) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Confirmar Exclusão'),
-        content: Text('Deseja realmente excluir ${musico.nome}?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              try {
-                final sucesso = await Provider.of<MusicosProvider>(context, listen: false).deletarMusico(musico.id!);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(sucesso ? 'Músico excluído com sucesso' : 'Erro ao excluir músico'),
-                      backgroundColor: sucesso ? Colors.green : Colors.red,
-                    ),
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Erro ao excluir músico'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Excluir'),
-          ),
-        ],
-      ),
+  void _confirmarExclusao(Musico musico) async {
+    final confirmed = await ConfirmDeleteDialog.show(
+      context,
+      entityName: musico.nome,
     );
+
+    if (confirmed && context.mounted) {
+      try {
+        final sucesso = await Provider.of<MusicosProvider>(context, listen: false).deletarMusico(musico.id!);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(sucesso ? 'Músico excluído com sucesso' : 'Erro ao excluir músico'),
+              backgroundColor: sucesso ? Colors.green : Colors.red,
+            ),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Erro ao excluir músico'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
   }
 
   @override

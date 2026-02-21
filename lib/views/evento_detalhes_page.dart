@@ -4,6 +4,7 @@ import 'package:sggm/controllers/auth_controller.dart'; // ✅ ADICIONAR
 import 'package:sggm/models/instrumentos.dart';
 import 'package:sggm/util/app_logger.dart';
 import 'package:sggm/views/musica_detalhes_page.dart';
+import 'package:sggm/views/widgets/dialogs/confirm_delete_dialog.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:sggm/controllers/eventos_controller.dart';
 import 'package:sggm/controllers/escalas_controller.dart';
@@ -594,8 +595,14 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
                                       ),
                                       IconButton(
                                         icon: const Icon(Icons.delete_outline, color: Colors.red),
-                                        onPressed: () {
-                                          if (item.id != null) {
+                                        onPressed: () async {
+                                          final confirmed = await ConfirmDeleteDialog.show(
+                                            context,
+                                            entityName: item.musicoNome ?? 'Músico',
+                                            message:
+                                                'Deseja remover ${item.musicoNome ?? "este músico"} da escala?\nEsta ação não pode ser desfeita.',
+                                          );
+                                          if (confirmed && context.mounted && item.id != null) {
                                             provider.deletarEscala(item.id!);
                                           }
                                         },
