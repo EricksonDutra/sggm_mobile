@@ -6,6 +6,7 @@ import 'package:sggm/controllers/musicos_controller.dart';
 import 'package:sggm/models/musicos.dart';
 import 'package:intl/intl.dart';
 import 'package:sggm/services/biometric_service.dart';
+import 'package:sggm/util/app_logger.dart';
 
 class PerfilEditPage extends StatefulWidget {
   final Musico musico;
@@ -206,7 +207,7 @@ class _PerfilEditPageState extends State<PerfilEditPage> {
         dadosAtualizados['instrumento_principal'] = _instrumentoSelecionado;
       }
 
-      print('📤 Enviando dados: $dadosAtualizados');
+      AppLogger.debug('📤 Enviando dados: $dadosAtualizados');
 
       // Atualizar no backend
       final musicosProvider = Provider.of<MusicosProvider>(context, listen: false);

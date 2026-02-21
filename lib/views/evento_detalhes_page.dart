@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sggm/controllers/auth_controller.dart'; // ✅ ADICIONAR
 import 'package:sggm/models/instrumentos.dart';
+import 'package:sggm/util/app_logger.dart';
 import 'package:sggm/views/musica_detalhes_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:sggm/controllers/eventos_controller.dart';
@@ -47,7 +48,7 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
         Provider.of<EventoProvider>(context, listen: false).listarEventos(),
       ]);
     } catch (e) {
-      print('❌ Erro ao carregar dados: $e');
+      AppLogger.error('❌ Erro ao carregar dados: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -170,7 +171,7 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
         }
       }
     } catch (e) {
-      print('❌ Erro ao notificar músico: $e');
+      AppLogger.error('❌ Erro ao notificar músico: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Erro: $e')),
