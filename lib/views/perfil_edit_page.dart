@@ -1,9 +1,12 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sggm/controllers/auth_controller.dart';
 import 'package:sggm/controllers/instrumentos_controller.dart';
 import 'package:sggm/controllers/musicos_controller.dart';
 import 'package:sggm/models/musicos.dart';
+// ignore: depend_on_referenced_packages
 import 'package:intl/intl.dart';
 import 'package:sggm/services/biometric_service.dart';
 import 'package:sggm/views/widgets/loading/loading_overlay.dart';

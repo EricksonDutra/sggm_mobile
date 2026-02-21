@@ -5,6 +5,7 @@
 [![Dart](https://img.shields.io/badge/Dart-3.4.0-0175C2?logo=dart)](https://dart.dev)
 [![Firebase](https://img.shields.io/badge/Firebase-Latest-FFCA28?logo=firebase)](https://firebase.google.com)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![CI](https://github.com/EricksonDutra/sggm_mobile/actions/workflows/ci.yml/badge.svg)](https://github.com/EricksonDutra/sggm_mobile/actions/workflows/ci.yml)
 
 **Sistema móvel de gerenciamento para grupos musicais da IPB Ponta
 Porã**
