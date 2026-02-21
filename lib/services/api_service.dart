@@ -1,7 +1,8 @@
 import 'package:dio/dio.dart';
+import 'package:sggm/services/retry_interceptor.dart';
 import 'package:sggm/services/secure_token_service.dart';
-import 'package:sggm/util/constants.dart';
 import 'package:sggm/util/app_logger.dart';
+import 'package:sggm/util/constants.dart';
 
 class ApiService {
   static const String baseUrl = AppConstants.baseUrl;
@@ -9,19 +10,14 @@ class ApiService {
   late final SecureTokenService _secureTokenService;
   late final Dio _dio;
 
-  // ✅ Callback para notificar logout quando refresh token expira
   static void Function()? onTokenExpired;
 
-  // ✅ Controle de renovação para evitar múltiplas chamadas simultâneas
   static bool _isRefreshing = false;
   static final List<_PendingRequest> _pendingRequests = [];
 
-  // Singleton pattern
   static final ApiService _instance = ApiService._internal();
 
-  factory ApiService() {
-    return _instance;
-  }
+  factory ApiService() => _instance;
 
   ApiService._internal() {
     _secureTokenService = SecureTokenService();
@@ -29,52 +25,50 @@ class ApiService {
     _dio = Dio(
       BaseOptions(
         baseUrl: baseUrl,
-        connectTimeout: const Duration(seconds: 15),
-        receiveTimeout: const Duration(seconds: 15),
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        connectTimeout: const Duration(seconds: 8),
+        receiveTimeout: const Duration(seconds: AppConstants.timeoutSeconds),
+        headers: {'Content-Type': 'application/json'},
       ),
     );
 
     _setupInterceptors();
   }
 
-  /// ✅ Método para setar callback de logout
   static void setOnTokenExpired(void Function() callback) {
     onTokenExpired = callback;
   }
 
-  /// Configurar interceptadores do Dio
   void _setupInterceptors() {
+    _dio.interceptors.add(
+      RetryInterceptor(
+        dio: _dio,
+        maxRetries: 3,
+        initialDelay: const Duration(seconds: 1),
+      ),
+    );
+
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
           try {
-            // 🔐 Adicionar token automaticamente em todas as requisições
             final token = await _secureTokenService.getToken();
-
-            AppLogger.debug('🔍 [AUTH] Verificando token...');
             if (token != null && token.isNotEmpty) {
               options.headers['Authorization'] = 'Bearer $token';
-              AppLogger.debug('✅ [AUTH] Token adicionado');
+              AppLogger.debug('Token de autenticação adicionado');
             } else {
-              AppLogger.warning('⚠️ [AUTH] Token não disponível');
+              AppLogger.warning('Token não disponível - requisição sem autenticação');
             }
           } catch (e) {
-            AppLogger.error('❌ [AUTH] Erro ao obter token', e);
+            AppLogger.error('Erro ao obter token', e);
           }
-
           return handler.next(options);
         },
         onError: (error, handler) async {
-          // 🔄 Tratar erro 401 (token expirado) com renovação automática
           if (error.response?.statusCode == 401) {
-            AppLogger.warning('❌ [AUTH] Token expirado (401)');
+            AppLogger.warning('Token expirado (401) — tentando renovar');
 
-            // Se já está renovando, adicionar à fila de requisições pendentes
             if (_isRefreshing) {
-              AppLogger.debug('⏳ [AUTH] Já renovando token, adicionando à fila...');
+              AppLogger.debug('Já renovando token, adicionando à fila');
               _pendingRequests.add(_PendingRequest(
                 requestOptions: error.requestOptions,
                 handler: handler,
@@ -85,19 +79,15 @@ class ApiService {
             _isRefreshing = true;
 
             try {
-              AppLogger.debug('🔄 [AUTH] Tentando renovar access token...');
-
-              // Obter refresh token
               final refreshToken = await _secureTokenService.getRefreshToken();
 
               if (refreshToken == null || refreshToken.isEmpty) {
-                AppLogger.warning('❌ [AUTH] Refresh token não encontrado');
+                AppLogger.warning('Refresh token não encontrado');
                 _isRefreshing = false;
                 _handleTokenExpiration();
                 return handler.next(error);
               }
 
-              // Chamar endpoint de refresh
               final refreshDio = Dio(BaseOptions(baseUrl: baseUrl));
               final refreshResponse = await refreshDio.post(
                 '/api/token/refresh/',
@@ -110,9 +100,8 @@ class ApiService {
 
               if (refreshResponse.statusCode == 200) {
                 final newAccessToken = refreshResponse.data['access'] as String;
-                AppLogger.debug('✅ [AUTH] Novo access token obtido');
+                AppLogger.debug('Novo access token obtido');
 
-                // Salvar novo token
                 await _secureTokenService.saveCredentials(
                   token: newAccessToken,
                   refreshToken: refreshToken,
@@ -124,43 +113,35 @@ class ApiService {
                   email: await _secureTokenService.getEmail(),
                 );
 
-                // ✅ Retentar requisição original com novo token
                 error.requestOptions.headers['Authorization'] = 'Bearer $newAccessToken';
-
                 final response = await _dio.fetch(error.requestOptions);
 
-                // ✅ Processar requisições pendentes
-                AppLogger.debug('📋 [AUTH] Processando ${_pendingRequests.length} requisições pendentes');
+                AppLogger.debug('Processando ${_pendingRequests.length} requisições pendentes');
                 for (var pending in _pendingRequests) {
                   pending.requestOptions.headers['Authorization'] = 'Bearer $newAccessToken';
                   _dio.fetch(pending.requestOptions).then(
-                    (response) {
-                      pending.handler.resolve(response);
-                    },
-                    onError: (e) {
-                      pending.handler.reject(e);
-                    },
-                  );
+                        (res) => pending.handler.resolve(res),
+                        onError: (e) => pending.handler.reject(e),
+                      );
                 }
                 _pendingRequests.clear();
                 _isRefreshing = false;
 
                 return handler.resolve(response);
               } else if (refreshResponse.statusCode == 401) {
-                // Refresh token expirado
-                AppLogger.warning('❌ [AUTH] Refresh token expirado ou inválido');
+                AppLogger.warning('Refresh token expirado ou inválido');
                 _isRefreshing = false;
                 _pendingRequests.clear();
                 _handleTokenExpiration();
                 return handler.next(error);
               }
 
-              AppLogger.warning('❌ [AUTH] Erro ao renovar token: ${refreshResponse.statusCode}');
+              AppLogger.error('Erro ao renovar token: ${refreshResponse.statusCode}');
               _isRefreshing = false;
               _pendingRequests.clear();
               return handler.next(error);
             } catch (e) {
-              AppLogger.warning('❌ [AUTH] Exceção ao renovar token: $e');
+              AppLogger.error('Exceção ao renovar token', e);
               _isRefreshing = false;
               _pendingRequests.clear();
               _handleTokenExpiration();
@@ -174,143 +155,108 @@ class ApiService {
     );
   }
 
-  /// ✅ Método para lidar com expiração do refresh token
   void _handleTokenExpiration() {
-    AppLogger.debug('🚪 [AUTH] Executando callback de logout...');
-    if (onTokenExpired != null) {
-      onTokenExpired!();
-    }
+    AppLogger.info('Executando callback de logout por token expirado');
+    onTokenExpired?.call();
   }
 
-  /// GET
   static Future<Response> get(
     String endpoint, {
     Map<String, dynamic>? queryParameters,
     bool useAuth = true,
   }) async {
     try {
-      AppLogger.debug('📥 [API GET] $baseUrl$endpoint');
       final response = await _instance._dio.get(
         endpoint,
         queryParameters: queryParameters,
-        options: Options(
-          validateStatus: (status) => status != null && status < 500,
-        ),
+        options: Options(validateStatus: (status) => status != null && status < 500),
       );
-      AppLogger.info('✅ [API] GET Status: ${response.statusCode}');
+      AppLogger.debug('GET $endpoint — status: ${response.statusCode}');
       return response;
     } on DioException catch (e) {
-      AppLogger.warning('❌ [API GET] Erro: ${e.message}');
-      AppLogger.warning('📝 Response: ${e.response?.data}');
+      AppLogger.error('Erro GET $endpoint', e);
       rethrow;
     }
   }
 
-  /// POST
   static Future<Response> post(
     String endpoint, {
     Map<String, dynamic>? body,
     bool useAuth = true,
   }) async {
     try {
-      AppLogger.debug('📤 [API POST] $baseUrl$endpoint');
-      if (body != null) {
-        AppLogger.debug('📋 Body keys: ${body.keys.toList()}');
-      }
       final response = await _instance._dio.post(
         endpoint,
         data: body,
-        options: Options(
-          validateStatus: (status) => status != null && status < 500,
-        ),
+        options: Options(validateStatus: (status) => status != null && status < 500),
       );
-      AppLogger.info('✅ [API] POST Status: ${response.statusCode}');
+      AppLogger.debug('POST $endpoint — status: ${response.statusCode}');
       return response;
     } on DioException catch (e) {
-      AppLogger.warning('❌ [API POST] Erro: ${e.message}');
-      AppLogger.warning('📝 Response: ${e.response?.data}');
+      AppLogger.error('Erro POST $endpoint', e);
       rethrow;
     }
   }
 
-  /// PUT
   static Future<Response> put(
     String endpoint, {
     Map<String, dynamic>? body,
     bool useAuth = true,
   }) async {
     try {
-      AppLogger.debug('📤 [API PUT] $baseUrl$endpoint');
       final response = await _instance._dio.put(
         endpoint,
         data: body,
-        options: Options(
-          validateStatus: (status) => status != null && status < 500,
-        ),
+        options: Options(validateStatus: (status) => status != null && status < 500),
       );
-      AppLogger.info('✅ [API] PUT Status: ${response.statusCode}');
+      AppLogger.debug('PUT $endpoint — status: ${response.statusCode}');
       return response;
     } on DioException catch (e) {
-      AppLogger.warning('❌ [API PUT] Erro: ${e.message}');
-      AppLogger.warning('📝 Response: ${e.response?.data}');
+      AppLogger.error('Erro PUT $endpoint', e);
       rethrow;
     }
   }
 
-  /// PATCH
   static Future<Response> patch(
     String endpoint, {
     Map<String, dynamic>? body,
     bool useAuth = true,
   }) async {
     try {
-      AppLogger.debug('📤 [API PATCH] $baseUrl$endpoint');
       final response = await _instance._dio.patch(
         endpoint,
         data: body,
-        options: Options(
-          validateStatus: (status) => status != null && status < 500,
-        ),
+        options: Options(validateStatus: (status) => status != null && status < 500),
       );
-      AppLogger.info('✅ [API] PATCH Status: ${response.statusCode}');
+      AppLogger.debug('PATCH $endpoint — status: ${response.statusCode}');
       return response;
     } on DioException catch (e) {
-      AppLogger.warning('❌ [API PATCH] Erro: ${e.message}');
-      AppLogger.warning('📝 Response: ${e.response?.data}');
+      AppLogger.error('Erro PATCH $endpoint', e);
       rethrow;
     }
   }
 
-  /// DELETE
   static Future<Response> delete(
     String endpoint, {
     bool useAuth = true,
   }) async {
     try {
-      AppLogger.debug('🗑️ [API DELETE] $baseUrl$endpoint');
       final response = await _instance._dio.delete(
         endpoint,
-        options: Options(
-          validateStatus: (status) => status != null && status < 500,
-        ),
+        options: Options(validateStatus: (status) => status != null && status < 500),
       );
-      AppLogger.info('✅ [API] DELETE Status: ${response.statusCode}');
+      AppLogger.debug('DELETE $endpoint — status: ${response.statusCode}');
       return response;
     } on DioException catch (e) {
-      AppLogger.warning('❌ [API DELETE] Erro: ${e.message}');
-      AppLogger.warning('📝 Response: ${e.response?.data}');
+      AppLogger.error('Erro DELETE $endpoint', e);
       rethrow;
     }
   }
 }
 
-/// ✅ Classe auxiliar para gerenciar requisições pendentes
 class _PendingRequest {
   final RequestOptions requestOptions;
   final ErrorInterceptorHandler handler;
 
-  _PendingRequest({
-    required this.requestOptions,
-    required this.handler,
-  });
+  _PendingRequest({required this.requestOptions, required this.handler});
 }
