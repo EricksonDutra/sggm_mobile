@@ -46,3 +46,16 @@ app.*.map.json
 .fvm/
 lib/firebase_options.dart
 lib\firebase_options.dart
+
+
+# Variáveis de ambiente
+.env
+.env.dev
+.env.staging
+.env.prod
+*.env
+
+# Scripts com valores reais (use os .example)
+scripts/run_dev.bat
+scripts/run_dev.sh
+scripts/build_prod.bat
