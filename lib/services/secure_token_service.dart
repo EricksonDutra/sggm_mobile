@@ -1,4 +1,5 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:sggm/util/app_logger.dart';
 
 class SecureTokenService {
   static const String _tokenKey = 'sggm_jwt_token';
@@ -282,7 +283,7 @@ class SecureTokenService {
         iOptions: _iosOptions,
       );
 
-      print('✅ Login biométrico habilitado para: $username');
+      AppLogger.info('✅ Login biométrico habilitado para: $username');
     } catch (e) {
       throw Exception('Erro ao habilitar biometria: $e');
     }
@@ -302,7 +303,7 @@ class SecureTokenService {
         iOptions: _iosOptions,
       );
 
-      print('✅ Login biométrico desabilitado');
+      AppLogger.info('✅ Login biométrico desabilitado');
     } catch (e) {
       throw Exception('Erro ao desabilitar biometria: $e');
     }

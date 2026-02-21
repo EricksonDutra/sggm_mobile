@@ -1,5 +1,6 @@
 import 'package:sggm/models/artista.dart';
 import 'package:sggm/services/api_service.dart';
+import 'package:sggm/util/app_logger.dart';
 
 class ArtistaService {
   Future<List<Artista>> listarArtistas({String? busca}) async {
@@ -37,7 +38,7 @@ class ArtistaService {
 
       return [];
     } catch (e) {
-      print('❌ Erro ao listar artistas: $e');
+      AppLogger.error('❌ Erro ao listar artistas: $e');
       rethrow;
     }
   }
@@ -57,7 +58,7 @@ class ArtistaService {
 
       throw Exception('Formato de resposta inválido');
     } catch (e) {
-      print('❌ Erro ao criar artista: $e');
+      AppLogger.error('❌ Erro ao criar artista: $e');
       rethrow;
     }
   }
@@ -76,7 +77,7 @@ class ArtistaService {
       return artistaExato;
     } catch (e) {
       // Se não existe, cria novo
-      print('⚠️ Artista não encontrado, criando novo...');
+      AppLogger.warning('⚠️ Artista não encontrado, criando novo...');
       return await criarArtista(nome);
     }
   }
@@ -93,7 +94,7 @@ class ArtistaService {
 
       return null;
     } catch (e) {
-      print('❌ Erro ao buscar artista por ID: $e');
+      AppLogger.error('❌ Erro ao buscar artista por ID: $e');
       return null;
     }
   }
@@ -106,7 +107,7 @@ class ArtistaService {
 
       return response.statusCode == 200;
     } catch (e) {
-      print('❌ Erro ao atualizar artista: $e');
+      AppLogger.error('❌ Erro ao atualizar artista: $e');
       return false;
     }
   }
@@ -117,7 +118,7 @@ class ArtistaService {
 
       return response.statusCode == 204 || response.statusCode == 200;
     } catch (e) {
-      print('❌ Erro ao deletar artista: $e');
+      AppLogger.error('❌ Erro ao deletar artista: $e');
       return false;
     }
   }

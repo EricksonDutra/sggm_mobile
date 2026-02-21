@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:local_auth_android/local_auth_android.dart';
 import 'package:local_auth_darwin/local_auth_darwin.dart';
+import 'package:sggm/util/app_logger.dart';
 
 class BiometricService {
   final LocalAuthentication _localAuth = LocalAuthentication();
@@ -11,7 +12,7 @@ class BiometricService {
     try {
       return await _localAuth.canCheckBiometrics;
     } on PlatformException catch (e) {
-      print('❌ Erro ao verificar biometria: $e');
+      AppLogger.error('❌ Erro ao verificar biometria: $e');
       return false;
     }
   }
@@ -21,7 +22,7 @@ class BiometricService {
     try {
       return await _localAuth.isDeviceSupported();
     } on PlatformException catch (e) {
-      print('❌ Erro ao verificar dispositivo: $e');
+      AppLogger.error('❌ Erro ao verificar dispositivo: $e');
       return false;
     }
   }
@@ -31,7 +32,7 @@ class BiometricService {
     try {
       return await _localAuth.getAvailableBiometrics();
     } on PlatformException catch (e) {
-      print('❌ Erro ao obter biometrias: $e');
+      AppLogger.error('❌ Erro ao obter biometrias: $e');
       return [];
     }
   }
@@ -45,7 +46,7 @@ class BiometricService {
 
       return canCheck && isSupported && biometrics.isNotEmpty;
     } catch (e) {
-      print('❌ Erro ao verificar disponibilidade: $e');
+      AppLogger.error('❌ Erro ao verificar disponibilidade: $e');
       return false;
     }
   }
@@ -59,11 +60,11 @@ class BiometricService {
     try {
       final isAvailable = await isBiometricAvailable();
       if (!isAvailable) {
-        print('⚠️ Biometria não disponível');
+        AppLogger.warning('⚠️ Biometria não disponível');
         return false;
       }
 
-      print('🔐 Iniciando autenticação biométrica...');
+      AppLogger.info('🔐 Iniciando autenticação biométrica...');
 
       final authenticated = await _localAuth.authenticate(
         localizedReason: reason,
@@ -95,35 +96,35 @@ class BiometricService {
       );
 
       if (authenticated) {
-        print('✅ Autenticação biométrica bem-sucedida');
+        AppLogger.info('✅ Autenticação biométrica bem-sucedida');
       } else {
-        print('❌ Autenticação biométrica falhou');
+        AppLogger.error('❌ Autenticação biométrica falhou');
       }
 
       return authenticated;
     } on PlatformException catch (e) {
-      print('❌ Erro na autenticação biométrica: ${e.code} - ${e.message}');
+      AppLogger.error('❌ Erro na autenticação biométrica: ${e.code} - ${e.message}');
 
       switch (e.code) {
         case 'NotAvailable':
-          print('⚠️ Biometria não disponível neste dispositivo');
+          AppLogger.warning('⚠️ Biometria não disponível neste dispositivo');
           break;
         case 'NotEnrolled':
-          print('⚠️ Nenhuma biometria cadastrada');
+          AppLogger.warning('⚠️ Nenhuma biometria cadastrada');
           break;
         case 'LockedOut':
-          print('⚠️ Muitas tentativas. Dispositivo bloqueado temporariamente');
+          AppLogger.warning('⚠️ Muitas tentativas. Dispositivo bloqueado temporariamente');
           break;
         case 'PermanentlyLockedOut':
-          print('⚠️ Dispositivo bloqueado permanentemente');
+          AppLogger.warning('⚠️ Dispositivo bloqueado permanentemente');
           break;
         default:
-          print('⚠️ Erro desconhecido: ${e.code}');
+          AppLogger.warning('⚠️ Erro desconhecido: ${e.code}');
       }
 
       return false;
     } catch (e) {
-      print('❌ Exceção na autenticação: $e');
+      AppLogger.error('❌ Exceção na autenticação: $e');
       return false;
     }
   }
@@ -153,9 +154,9 @@ class BiometricService {
   Future<void> stopAuthentication() async {
     try {
       await _localAuth.stopAuthentication();
-      print('🛑 Autenticação cancelada');
+      AppLogger.info('🛑 Autenticação cancelada');
     } catch (e) {
-      print('❌ Erro ao cancelar autenticação: $e');
+      AppLogger.error('❌ Erro ao cancelar autenticação: $e');
     }
   }
 }

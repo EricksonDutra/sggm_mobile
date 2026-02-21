@@ -1,3 +1,5 @@
+import 'package:sggm/util/app_logger.dart';
+
 import 'secure_token_service.dart';
 
 class TokenMigrationService {
@@ -8,7 +10,7 @@ class TokenMigrationService {
 
   /// Migração não mais necessária - todos os tokens agora são seguros
   Future<void> migrateIfNeeded() async {
-    print('ℹ️ Sistema de tokens atualizado - migração não necessária');
+    AppLogger.info('ℹ️ Sistema de tokens atualizado - migração não necessária');
     // Não faz nada - migração desativada
     return;
   }
