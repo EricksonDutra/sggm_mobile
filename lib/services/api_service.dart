@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:sggm/services/secure_token_service.dart';
 import 'package:sggm/util/constants.dart';
+import 'package:sggm/util/app_logger.dart';
 
 class ApiService {
   static const String baseUrl = AppConstants.baseUrl;
@@ -53,15 +54,15 @@ class ApiService {
             // 🔐 Adicionar token automaticamente em todas as requisições
             final token = await _secureTokenService.getToken();
 
-            print('🔍 [AUTH] Verificando token...');
+            AppLogger.debug('🔍 [AUTH] Verificando token...');
             if (token != null && token.isNotEmpty) {
               options.headers['Authorization'] = 'Bearer $token';
-              print('✅ [AUTH] Token adicionado: ${token.substring(0, 20)}...');
+              AppLogger.debug('✅ [AUTH] Token adicionado');
             } else {
-              print('⚠️ [AUTH] Token não disponível - requisição sem autenticação');
+              AppLogger.warning('⚠️ [AUTH] Token não disponível');
             }
           } catch (e) {
-            print('❌ [AUTH] Erro ao obter token: $e');
+            AppLogger.error('❌ [AUTH] Erro ao obter token', e);
           }
 
           return handler.next(options);
@@ -69,12 +70,11 @@ class ApiService {
         onError: (error, handler) async {
           // 🔄 Tratar erro 401 (token expirado) com renovação automática
           if (error.response?.statusCode == 401) {
-            print('❌ [AUTH] Token expirado ou inválido (401)');
-            print('📝 Response: ${error.response?.data}');
+            AppLogger.warning('❌ [AUTH] Token expirado (401)');
 
             // Se já está renovando, adicionar à fila de requisições pendentes
             if (_isRefreshing) {
-              print('⏳ [AUTH] Já renovando token, adicionando à fila...');
+              AppLogger.debug('⏳ [AUTH] Já renovando token, adicionando à fila...');
               _pendingRequests.add(_PendingRequest(
                 requestOptions: error.requestOptions,
                 handler: handler,
@@ -85,13 +85,13 @@ class ApiService {
             _isRefreshing = true;
 
             try {
-              print('🔄 [AUTH] Tentando renovar access token...');
+              AppLogger.debug('🔄 [AUTH] Tentando renovar access token...');
 
               // Obter refresh token
               final refreshToken = await _secureTokenService.getRefreshToken();
 
               if (refreshToken == null || refreshToken.isEmpty) {
-                print('❌ [AUTH] Refresh token não encontrado');
+                AppLogger.warning('❌ [AUTH] Refresh token não encontrado');
                 _isRefreshing = false;
                 _handleTokenExpiration();
                 return handler.next(error);
@@ -110,7 +110,7 @@ class ApiService {
 
               if (refreshResponse.statusCode == 200) {
                 final newAccessToken = refreshResponse.data['access'] as String;
-                print('✅ [AUTH] Novo access token obtido');
+                AppLogger.debug('✅ [AUTH] Novo access token obtido');
 
                 // Salvar novo token
                 await _secureTokenService.saveCredentials(
@@ -130,7 +130,7 @@ class ApiService {
                 final response = await _dio.fetch(error.requestOptions);
 
                 // ✅ Processar requisições pendentes
-                print('📋 [AUTH] Processando ${_pendingRequests.length} requisições pendentes');
+                AppLogger.debug('📋 [AUTH] Processando ${_pendingRequests.length} requisições pendentes');
                 for (var pending in _pendingRequests) {
                   pending.requestOptions.headers['Authorization'] = 'Bearer $newAccessToken';
                   _dio.fetch(pending.requestOptions).then(
@@ -148,19 +148,19 @@ class ApiService {
                 return handler.resolve(response);
               } else if (refreshResponse.statusCode == 401) {
                 // Refresh token expirado
-                print('❌ [AUTH] Refresh token expirado ou inválido');
+                AppLogger.warning('❌ [AUTH] Refresh token expirado ou inválido');
                 _isRefreshing = false;
                 _pendingRequests.clear();
                 _handleTokenExpiration();
                 return handler.next(error);
               }
 
-              print('❌ [AUTH] Erro ao renovar token: ${refreshResponse.statusCode}');
+              AppLogger.warning('❌ [AUTH] Erro ao renovar token: ${refreshResponse.statusCode}');
               _isRefreshing = false;
               _pendingRequests.clear();
               return handler.next(error);
             } catch (e) {
-              print('❌ [AUTH] Exceção ao renovar token: $e');
+              AppLogger.warning('❌ [AUTH] Exceção ao renovar token: $e');
               _isRefreshing = false;
               _pendingRequests.clear();
               _handleTokenExpiration();
@@ -176,7 +176,7 @@ class ApiService {
 
   /// ✅ Método para lidar com expiração do refresh token
   void _handleTokenExpiration() {
-    print('🚪 [AUTH] Executando callback de logout...');
+    AppLogger.debug('🚪 [AUTH] Executando callback de logout...');
     if (onTokenExpired != null) {
       onTokenExpired!();
     }
@@ -189,7 +189,7 @@ class ApiService {
     bool useAuth = true,
   }) async {
     try {
-      print('📥 [API GET] $baseUrl$endpoint');
+      AppLogger.debug('📥 [API GET] $baseUrl$endpoint');
       final response = await _instance._dio.get(
         endpoint,
         queryParameters: queryParameters,
@@ -197,11 +197,11 @@ class ApiService {
           validateStatus: (status) => status != null && status < 500,
         ),
       );
-      print('✅ [API] GET Status: ${response.statusCode}');
+      AppLogger.info('✅ [API] GET Status: ${response.statusCode}');
       return response;
     } on DioException catch (e) {
-      print('❌ [API GET] Erro: ${e.message}');
-      print('📝 Response: ${e.response?.data}');
+      AppLogger.warning('❌ [API GET] Erro: ${e.message}');
+      AppLogger.warning('📝 Response: ${e.response?.data}');
       rethrow;
     }
   }
@@ -213,9 +213,9 @@ class ApiService {
     bool useAuth = true,
   }) async {
     try {
-      print('📤 [API POST] $baseUrl$endpoint');
+      AppLogger.debug('📤 [API POST] $baseUrl$endpoint');
       if (body != null) {
-        print('📋 Body keys: ${body.keys.toList()}');
+        AppLogger.debug('📋 Body keys: ${body.keys.toList()}');
       }
       final response = await _instance._dio.post(
         endpoint,
@@ -224,11 +224,11 @@ class ApiService {
           validateStatus: (status) => status != null && status < 500,
         ),
       );
-      print('✅ [API] POST Status: ${response.statusCode}');
+      AppLogger.info('✅ [API] POST Status: ${response.statusCode}');
       return response;
     } on DioException catch (e) {
-      print('❌ [API POST] Erro: ${e.message}');
-      print('📝 Response: ${e.response?.data}');
+      AppLogger.warning('❌ [API POST] Erro: ${e.message}');
+      AppLogger.warning('📝 Response: ${e.response?.data}');
       rethrow;
     }
   }
@@ -240,7 +240,7 @@ class ApiService {
     bool useAuth = true,
   }) async {
     try {
-      print('📤 [API PUT] $baseUrl$endpoint');
+      AppLogger.debug('📤 [API PUT] $baseUrl$endpoint');
       final response = await _instance._dio.put(
         endpoint,
         data: body,
@@ -248,11 +248,11 @@ class ApiService {
           validateStatus: (status) => status != null && status < 500,
         ),
       );
-      print('✅ [API] PUT Status: ${response.statusCode}');
+      AppLogger.info('✅ [API] PUT Status: ${response.statusCode}');
       return response;
     } on DioException catch (e) {
-      print('❌ [API PUT] Erro: ${e.message}');
-      print('📝 Response: ${e.response?.data}');
+      AppLogger.warning('❌ [API PUT] Erro: ${e.message}');
+      AppLogger.warning('📝 Response: ${e.response?.data}');
       rethrow;
     }
   }
@@ -264,7 +264,7 @@ class ApiService {
     bool useAuth = true,
   }) async {
     try {
-      print('📤 [API PATCH] $baseUrl$endpoint');
+      AppLogger.debug('📤 [API PATCH] $baseUrl$endpoint');
       final response = await _instance._dio.patch(
         endpoint,
         data: body,
@@ -272,11 +272,11 @@ class ApiService {
           validateStatus: (status) => status != null && status < 500,
         ),
       );
-      print('✅ [API] PATCH Status: ${response.statusCode}');
+      AppLogger.info('✅ [API] PATCH Status: ${response.statusCode}');
       return response;
     } on DioException catch (e) {
-      print('❌ [API PATCH] Erro: ${e.message}');
-      print('📝 Response: ${e.response?.data}');
+      AppLogger.warning('❌ [API PATCH] Erro: ${e.message}');
+      AppLogger.warning('📝 Response: ${e.response?.data}');
       rethrow;
     }
   }
@@ -287,18 +287,18 @@ class ApiService {
     bool useAuth = true,
   }) async {
     try {
-      print('🗑️ [API DELETE] $baseUrl$endpoint');
+      AppLogger.debug('🗑️ [API DELETE] $baseUrl$endpoint');
       final response = await _instance._dio.delete(
         endpoint,
         options: Options(
           validateStatus: (status) => status != null && status < 500,
         ),
       );
-      print('✅ [API] DELETE Status: ${response.statusCode}');
+      AppLogger.info('✅ [API] DELETE Status: ${response.statusCode}');
       return response;
     } on DioException catch (e) {
-      print('❌ [API DELETE] Erro: ${e.message}');
-      print('📝 Response: ${e.response?.data}');
+      AppLogger.warning('❌ [API DELETE] Erro: ${e.message}');
+      AppLogger.warning('📝 Response: ${e.response?.data}');
       rethrow;
     }
   }
