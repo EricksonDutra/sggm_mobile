@@ -36,11 +36,11 @@ void main() {
 
   group('Validators - validatePassword()', () {
     test('senha válida retorna null', () {
-      expect(Validators.validatePassword('senha123'), null);
+      expect(Validators.validatePassword('test-value-ok'), null);
     });
 
     test('senha curta retorna mensagem', () {
-      expect(Validators.validatePassword('123'), isNotNull);
+      expect(Validators.validatePassword('abc'), isNotNull);
     });
 
     test('senha vazia retorna mensagem', () {
