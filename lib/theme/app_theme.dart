@@ -60,7 +60,7 @@ class AppTheme {
       // ✅ Cards
       cardTheme: CardThemeData(
         elevation: 3,
-        shadowColor: Colors.black.withOpacity(0.3),
+        shadowColor: Colors.black.withValues(alpha: 0.3),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
@@ -108,7 +108,7 @@ class AppTheme {
           backgroundColor: presbyterianoVerde,
           foregroundColor: Colors.white,
           elevation: 2,
-          shadowColor: presbyterianoVerde.withOpacity(0.5),
+          shadowColor: presbyterianoVerde.withValues(alpha: 0.5),
           padding: const EdgeInsets.symmetric(
             horizontal: 24,
             vertical: 14,
@@ -190,7 +190,7 @@ class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
         ),
-        selectedTileColor: presbyterianoVerde.withOpacity(0.15),
+        selectedTileColor: presbyterianoVerde.withValues(alpha: 0.15),
         selectedColor: presbyterianoVerdeClaro,
       ),
 
@@ -235,7 +235,7 @@ class AppTheme {
         }),
         trackColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return presbyterianoVerde.withOpacity(0.5);
+            return presbyterianoVerde.withValues(alpha: 0.5);
           }
           return const Color(0xFF616161);
         }),
