@@ -21,7 +21,6 @@ dependencies:
   firebase_messaging: ^15.1.5
   flutter_local_notifications: ^18.0.1
   dio: ^5.9.1
-  intl: ^0.20.2
   local_auth: ^2.3.0 
   local_auth_android: ^1.0.44
   local_auth_darwin: ^1.4.1
