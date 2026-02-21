@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:dio/dio.dart';
+import 'package:sggm/core/errors/app_exception.dart';
+import 'package:sggm/core/errors/error_handler.dart';
 import 'package:sggm/models/escalas.dart';
 import 'package:sggm/services/api_service.dart';
 import 'package:sggm/util/app_logger.dart';
@@ -23,78 +24,59 @@ class EscalasProvider extends ChangeNotifier {
 
     try {
       final response = await ApiService.get(apiUrl);
-
       AppLogger.debug('listarEscalas status: ${response.statusCode}');
 
-      if (response.statusCode! == 200) {
+      if (response.statusCode == 200) {
         _escalas = _parseEscalasList(response.data);
         AppLogger.info('${_escalas.length} escalas carregadas');
-        notifyListeners();
-      } else if (response.statusCode! == 401) {
-        _errorMessage = 'Não autorizado. Faça login novamente.';
-        throw Exception(_errorMessage);
       } else {
-        _errorMessage = 'Erro ${response.statusCode}';
-        throw Exception(_errorMessage);
+        throw _exceptionFromStatus(response.statusCode, 'Erro ao listar escalas');
       }
-    } on DioException catch (e) {
-      _errorMessage = 'Erro ao listar escalas: ${e.message}';
-      AppLogger.error('Erro ao listar escalas', e);
-      rethrow;
-    } catch (e, stackTrace) {
-      _errorMessage = 'Erro ao listar escalas: $e';
-      AppLogger.error('Erro ao listar escalas', e, stackTrace);
-      rethrow;
+    } catch (e) {
+      final appException = ErrorHandler.handle(e);
+      _errorMessage = appException.message;
+      AppLogger.error('listarEscalas', e);
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  Future<void> adicionarEscala(Escala escala) async {
+  Future<bool> adicionarEscala(Escala escala) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
       final response = await ApiService.post(apiUrl, body: escala.toJson());
-
       AppLogger.debug('adicionarEscala status: ${response.statusCode}');
 
-      if (response.statusCode! == 201 || response.statusCode! == 200) {
+      if (response.statusCode == 201 || response.statusCode == 200) {
         final novaEscala = Escala.fromJson(response.data);
         _escalas.add(novaEscala);
         AppLogger.info('Escala adicionada: ID ${novaEscala.id}');
-        notifyListeners();
-      } else if (response.statusCode! == 401) {
-        _errorMessage = 'Não autorizado. Faça login novamente.';
-        throw Exception(_errorMessage);
+        return true;
       } else {
-        _errorMessage = 'Falha ao criar escala';
-        throw Exception(_errorMessage);
+        throw _exceptionFromStatus(response.statusCode, 'Falha ao criar escala');
       }
-    } on DioException catch (e) {
-      _errorMessage = 'Erro ao adicionar escala: ${e.message}';
-      AppLogger.error('Erro ao adicionar escala', e);
-      rethrow;
-    } catch (e, stackTrace) {
-      _errorMessage = 'Erro ao adicionar escala: $e';
-      AppLogger.error('Erro ao adicionar escala', e, stackTrace);
-      rethrow;
+    } catch (e) {
+      final appException = ErrorHandler.handle(e);
+      _errorMessage = appException.message;
+      AppLogger.error('adicionarEscala', e);
+      return false;
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  Future<void> atualizarEscala(int id, Escala escala) async {
+  Future<bool> atualizarEscala(int id, Escala escala) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
       final response = await ApiService.put('$apiUrl$id/', body: escala.toJson());
-
       AppLogger.debug('atualizarEscala status: ${response.statusCode}');
 
       if (response.statusCode! >= 200 && response.statusCode! <= 299) {
@@ -102,58 +84,43 @@ class EscalasProvider extends ChangeNotifier {
         if (index != -1) {
           _escalas[index] = Escala.fromJson(response.data);
           AppLogger.info('Escala atualizada: ID $id');
-          notifyListeners();
         }
-      } else if (response.statusCode! == 401) {
-        _errorMessage = 'Não autorizado. Faça login novamente.';
-        throw Exception(_errorMessage);
+        return true;
       } else {
-        _errorMessage = 'Falha ao atualizar escala';
-        throw Exception(_errorMessage);
+        throw _exceptionFromStatus(response.statusCode, 'Falha ao atualizar escala');
       }
-    } on DioException catch (e) {
-      _errorMessage = 'Erro ao atualizar escala: ${e.message}';
-      AppLogger.error('Erro ao atualizar escala ID $id', e);
-      rethrow;
-    } catch (e, stackTrace) {
-      _errorMessage = 'Erro ao atualizar escala: $e';
-      AppLogger.error('Erro ao atualizar escala ID $id', e, stackTrace);
-      rethrow;
+    } catch (e) {
+      final appException = ErrorHandler.handle(e);
+      _errorMessage = appException.message;
+      AppLogger.error('atualizarEscala $id', e);
+      return false;
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  Future<void> deletarEscala(int id) async {
+  Future<bool> deletarEscala(int id) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
       final response = await ApiService.delete('$apiUrl$id/');
-
       AppLogger.debug('deletarEscala status: ${response.statusCode}');
 
       if (response.statusCode! >= 200 && response.statusCode! <= 299) {
         _escalas.removeWhere((escala) => escala.id == id);
         AppLogger.info('Escala deletada: ID $id');
-        notifyListeners();
-      } else if (response.statusCode! == 401) {
-        _errorMessage = 'Não autorizado. Faça login novamente.';
-        throw Exception(_errorMessage);
+        return true;
       } else {
-        _errorMessage = 'Falha ao deletar escala';
-        throw Exception(_errorMessage);
+        throw _exceptionFromStatus(response.statusCode, 'Falha ao deletar escala');
       }
-    } on DioException catch (e) {
-      _errorMessage = 'Erro ao deletar escala: ${e.message}';
-      AppLogger.error('Erro ao deletar escala ID $id', e);
-      rethrow;
-    } catch (e, stackTrace) {
-      _errorMessage = 'Erro ao deletar escala: $e';
-      AppLogger.error('Erro ao deletar escala ID $id', e, stackTrace);
-      rethrow;
+    } catch (e) {
+      final appException = ErrorHandler.handle(e);
+      _errorMessage = appException.message;
+      AppLogger.error('deletarEscala $id', e);
+      return false;
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -163,20 +130,19 @@ class EscalasProvider extends ChangeNotifier {
   Future<List<Escala>> buscarEscalasPorEvento(int eventoId) async {
     try {
       final response = await ApiService.get('$apiUrl?evento=$eventoId');
+      AppLogger.debug('buscarEscalasPorEvento status: ${response.statusCode}');
 
-      if (response.statusCode! == 200) {
+      if (response.statusCode == 200) {
         final escalas = _parseEscalasList(response.data);
         AppLogger.debug('${escalas.length} escalas encontradas para evento $eventoId');
         return escalas;
-      } else if (response.statusCode! == 401) {
-        throw Exception('Não autorizado. Faça login novamente.');
+      } else {
+        throw _exceptionFromStatus(response.statusCode, 'Erro ao buscar escalas do evento');
       }
-      return [];
-    } on DioException catch (e) {
-      AppLogger.error('Erro ao buscar escalas do evento $eventoId', e);
-      return [];
-    } catch (e, stackTrace) {
-      AppLogger.error('Erro ao buscar escalas do evento $eventoId', e, stackTrace);
+    } catch (e) {
+      final appException = ErrorHandler.handle(e);
+      _errorMessage = appException.message;
+      AppLogger.error('buscarEscalasPorEvento $eventoId', e);
       return [];
     }
   }
@@ -184,25 +150,24 @@ class EscalasProvider extends ChangeNotifier {
   Future<List<Escala>> buscarEscalasPorMusico(int musicoId) async {
     try {
       final response = await ApiService.get('$apiUrl?musico=$musicoId');
+      AppLogger.debug('buscarEscalasPorMusico status: ${response.statusCode}');
 
-      if (response.statusCode! == 200) {
+      if (response.statusCode == 200) {
         final escalas = _parseEscalasList(response.data);
         AppLogger.debug('${escalas.length} escalas encontradas para músico $musicoId');
         return escalas;
-      } else if (response.statusCode! == 401) {
-        throw Exception('Não autorizado. Faça login novamente.');
+      } else {
+        throw _exceptionFromStatus(response.statusCode, 'Erro ao buscar escalas do músico');
       }
-      return [];
-    } on DioException catch (e) {
-      AppLogger.error('Erro ao buscar escalas do músico $musicoId', e);
-      return [];
-    } catch (e, stackTrace) {
-      AppLogger.error('Erro ao buscar escalas do músico $musicoId', e, stackTrace);
+    } catch (e) {
+      final appException = ErrorHandler.handle(e);
+      _errorMessage = appException.message;
+      AppLogger.error('buscarEscalasPorMusico $musicoId', e);
       return [];
     }
   }
 
-  Future<void> confirmarPresenca(int escalaId, bool confirmado) async {
+  Future<bool> confirmarPresenca(int escalaId, bool confirmado) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -212,7 +177,6 @@ class EscalasProvider extends ChangeNotifier {
         '$apiUrl$escalaId/confirmar/',
         body: {'confirmado': confirmado},
       );
-
       AppLogger.debug('confirmarPresenca status: ${response.statusCode}');
 
       if (response.statusCode! >= 200 && response.statusCode! <= 299) {
@@ -231,22 +195,38 @@ class EscalasProvider extends ChangeNotifier {
           );
           AppLogger.info('Presença ${confirmado ? "confirmada" : "desconfirmada"} na escala $escalaId');
         }
-        notifyListeners();
+        return true;
       } else {
-        _errorMessage = 'Erro ao confirmar presença';
-        throw Exception(_errorMessage);
+        throw _exceptionFromStatus(response.statusCode, 'Erro ao confirmar presença');
       }
-    } on DioException catch (e) {
-      _errorMessage = 'Erro ao confirmar presença: ${e.message}';
-      AppLogger.error('Erro ao confirmar presença na escala $escalaId', e);
-      rethrow;
-    } catch (e, stackTrace) {
-      _errorMessage = 'Erro ao confirmar presença: $e';
-      AppLogger.error('Erro ao confirmar presença na escala $escalaId', e, stackTrace);
-      rethrow;
+    } catch (e) {
+      final appException = ErrorHandler.handle(e);
+      _errorMessage = appException.message;
+      AppLogger.error('confirmarPresenca $escalaId', e);
+      return false;
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  // ── helpers ──────────────────────────────────────────────────────────────
+
+  AppException _exceptionFromStatus(int? statusCode, String fallback) {
+    switch (statusCode) {
+      case 401:
+        return const UnauthorizedException();
+      case 403:
+        return const ForbiddenException();
+      case 404:
+        return const NotFoundException();
+      case 422:
+        return const ValidationException();
+      default:
+        if (statusCode != null && statusCode >= 500) {
+          return ServerException(statusCode: statusCode);
+        }
+        return UnknownException(details: '$fallback (HTTP $statusCode)');
     }
   }
 
@@ -259,7 +239,7 @@ class EscalasProvider extends ChangeNotifier {
     } else if (data is List) {
       resultsList = data;
     } else {
-      throw Exception('Formato de resposta inesperado: ${data.runtimeType}');
+      throw UnknownException(details: 'Formato inesperado: ${data.runtimeType}');
     }
 
     return resultsList.map((item) => Escala.fromJson(item as Map<String, dynamic>)).toList();

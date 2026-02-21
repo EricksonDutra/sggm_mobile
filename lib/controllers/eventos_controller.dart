@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:dio/dio.dart';
+import 'package:sggm/core/errors/app_exception.dart';
+import 'package:sggm/core/errors/error_handler.dart';
 import 'package:sggm/models/eventos.dart';
 import 'package:sggm/services/api_service.dart';
 import 'package:sggm/util/app_logger.dart';
@@ -23,144 +24,110 @@ class EventoProvider with ChangeNotifier {
 
     try {
       final response = await ApiService.get(apiUrl);
-
       AppLogger.debug('listarEventos status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         _eventos = _parseEventosList(response.data);
         AppLogger.info('${_eventos.length} eventos carregados');
-        notifyListeners();
-      } else if (response.statusCode == 401) {
-        _errorMessage = 'Não autorizado. Faça login novamente.';
-        throw Exception(_errorMessage);
       } else {
-        _errorMessage = 'Erro ${response.statusCode}';
-        throw Exception(_errorMessage);
+        throw _exceptionFromStatus(response.statusCode, 'Erro ao listar eventos');
       }
-    } on DioException catch (e) {
-      _errorMessage = 'Erro ao listar eventos: ${e.message}';
-      AppLogger.error('Erro ao listar eventos', e);
-      rethrow;
-    } catch (e, stackTrace) {
-      _errorMessage = 'Erro ao listar eventos: $e';
-      AppLogger.error('Erro ao listar eventos', e, stackTrace);
-      rethrow;
+    } catch (e) {
+      final appException = ErrorHandler.handle(e);
+      _errorMessage = appException.message;
+      AppLogger.error('listarEventos', e);
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  Future<void> adicionarEvento(Evento evento) async {
+  Future<bool> adicionarEvento(Evento evento) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
       final response = await ApiService.post(apiUrl, body: evento.toJson());
-
       AppLogger.debug('adicionarEvento status: ${response.statusCode}');
 
       if (response.statusCode == 201 || response.statusCode == 200) {
         final novo = Evento.fromJson(response.data);
         _eventos.add(novo);
         AppLogger.info('Evento adicionado: ID ${novo.id}');
-        notifyListeners();
-      } else if (response.statusCode == 401) {
-        _errorMessage = 'Não autorizado. Faça login novamente.';
-        throw Exception(_errorMessage);
+        return true;
       } else {
-        _errorMessage = 'Falha ao criar evento';
-        throw Exception(_errorMessage);
+        throw _exceptionFromStatus(response.statusCode, 'Falha ao criar evento');
       }
-    } on DioException catch (e) {
-      _errorMessage = 'Erro ao adicionar evento: ${e.message}';
-      AppLogger.error('Erro ao adicionar evento', e);
-      rethrow;
-    } catch (e, stackTrace) {
-      _errorMessage = 'Erro ao adicionar evento: $e';
-      AppLogger.error('Erro ao adicionar evento', e, stackTrace);
-      rethrow;
+    } catch (e) {
+      final appException = ErrorHandler.handle(e);
+      _errorMessage = appException.message;
+      AppLogger.error('adicionarEvento', e);
+      return false;
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  Future<void> atualizarEvento(int id, Evento novoEvento) async {
+  Future<bool> atualizarEvento(int id, Evento novoEvento) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
       final response = await ApiService.put('$apiUrl$id/', body: novoEvento.toJson());
-
       AppLogger.debug('atualizarEvento status: ${response.statusCode}');
 
       if (response.statusCode! >= 200 && response.statusCode! <= 299) {
-        final index = _eventos.indexWhere((evento) => evento.id == id);
+        final index = _eventos.indexWhere((e) => e.id == id);
         if (index != -1) {
           _eventos[index] = Evento.fromJson(response.data);
           AppLogger.info('Evento atualizado: ID $id');
-          notifyListeners();
         }
-      } else if (response.statusCode == 401) {
-        _errorMessage = 'Não autorizado. Faça login novamente.';
-        throw Exception(_errorMessage);
+        return true;
       } else {
-        _errorMessage = 'Falha ao atualizar evento';
-        throw Exception(_errorMessage);
+        throw _exceptionFromStatus(response.statusCode, 'Falha ao atualizar evento');
       }
-    } on DioException catch (e) {
-      _errorMessage = 'Erro ao atualizar evento: ${e.message}';
-      AppLogger.error('Erro ao atualizar evento ID $id', e);
-      rethrow;
-    } catch (e, stackTrace) {
-      _errorMessage = 'Erro ao atualizar evento: $e';
-      AppLogger.error('Erro ao atualizar evento ID $id', e, stackTrace);
-      rethrow;
+    } catch (e) {
+      final appException = ErrorHandler.handle(e);
+      _errorMessage = appException.message;
+      AppLogger.error('atualizarEvento $id', e);
+      return false;
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  Future<void> deletarEvento(int id) async {
+  Future<bool> deletarEvento(int id) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
       final response = await ApiService.delete('$apiUrl$id/');
-
       AppLogger.debug('deletarEvento status: ${response.statusCode}');
 
       if (response.statusCode! >= 200 && response.statusCode! <= 299) {
-        _eventos.removeWhere((evento) => evento.id == id);
+        _eventos.removeWhere((e) => e.id == id);
         AppLogger.info('Evento deletado: ID $id');
-        notifyListeners();
-      } else if (response.statusCode == 401) {
-        _errorMessage = 'Não autorizado. Faça login novamente.';
-        throw Exception(_errorMessage);
+        return true;
       } else {
-        _errorMessage = 'Falha ao deletar evento';
-        throw Exception(_errorMessage);
+        throw _exceptionFromStatus(response.statusCode, 'Falha ao deletar evento');
       }
-    } on DioException catch (e) {
-      _errorMessage = 'Erro ao deletar evento: ${e.message}';
-      AppLogger.error('Erro ao deletar evento ID $id', e);
-      rethrow;
-    } catch (e, stackTrace) {
-      _errorMessage = 'Erro ao deletar evento: $e';
-      AppLogger.error('Erro ao deletar evento ID $id', e, stackTrace);
-      rethrow;
+    } catch (e) {
+      final appException = ErrorHandler.handle(e);
+      _errorMessage = appException.message;
+      AppLogger.error('deletarEvento $id', e);
+      return false;
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  Future<void> atualizarRepertorio(int eventoId, List<int> musicaIds) async {
+  Future<bool> atualizarRepertorio(int eventoId, List<int> musicaIds) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -170,27 +137,20 @@ class EventoProvider with ChangeNotifier {
         '$apiUrl$eventoId/adicionar_repertorio/',
         body: {'musicas': musicaIds},
       );
-
       AppLogger.debug('atualizarRepertorio status: ${response.statusCode}');
 
       if (response.statusCode! >= 200 && response.statusCode! <= 299) {
         AppLogger.info('Repertório do evento $eventoId atualizado');
         await listarEventos();
-      } else if (response.statusCode == 401) {
-        _errorMessage = 'Não autorizado. Faça login novamente.';
-        throw Exception(_errorMessage);
+        return true;
       } else {
-        _errorMessage = 'Falha ao atualizar setlist';
-        throw Exception(_errorMessage);
+        throw _exceptionFromStatus(response.statusCode, 'Falha ao atualizar setlist');
       }
-    } on DioException catch (e) {
-      _errorMessage = 'Erro ao atualizar repertório: ${e.message}';
-      AppLogger.error('Erro ao atualizar repertório do evento $eventoId', e);
-      rethrow;
-    } catch (e, stackTrace) {
-      _errorMessage = 'Erro ao atualizar repertório: $e';
-      AppLogger.error('Erro ao atualizar repertório do evento $eventoId', e, stackTrace);
-      rethrow;
+    } catch (e) {
+      final appException = ErrorHandler.handle(e);
+      _errorMessage = appException.message;
+      AppLogger.error('atualizarRepertorio $eventoId', e);
+      return false;
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -200,23 +160,39 @@ class EventoProvider with ChangeNotifier {
   Future<Evento?> buscarEvento(int id) async {
     try {
       final response = await ApiService.get('$apiUrl$id/');
-
       AppLogger.debug('buscarEvento status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
-        final evento = Evento.fromJson(response.data);
         AppLogger.info('Evento encontrado: ID $id');
-        return evento;
-      } else if (response.statusCode == 401) {
-        throw Exception('Não autorizado. Faça login novamente.');
+        return Evento.fromJson(response.data);
+      } else {
+        throw _exceptionFromStatus(response.statusCode, 'Evento não encontrado');
       }
+    } catch (e) {
+      final appException = ErrorHandler.handle(e);
+      _errorMessage = appException.message;
+      AppLogger.error('buscarEvento $id', e);
       return null;
-    } on DioException catch (e) {
-      AppLogger.error('Erro ao buscar evento ID $id', e);
-      rethrow;
-    } catch (e, stackTrace) {
-      AppLogger.error('Erro ao buscar evento ID $id', e, stackTrace);
-      rethrow;
+    }
+  }
+
+  // ── helpers ──────────────────────────────────────────────────────────────
+
+  AppException _exceptionFromStatus(int? statusCode, String fallback) {
+    switch (statusCode) {
+      case 401:
+        return const UnauthorizedException();
+      case 403:
+        return const ForbiddenException();
+      case 404:
+        return const NotFoundException();
+      case 422:
+        return const ValidationException();
+      default:
+        if (statusCode != null && statusCode >= 500) {
+          return ServerException(statusCode: statusCode);
+        }
+        return UnknownException(details: '$fallback (HTTP $statusCode)');
     }
   }
 
@@ -229,7 +205,7 @@ class EventoProvider with ChangeNotifier {
     } else if (data is List) {
       resultsList = data;
     } else {
-      throw Exception('Formato de resposta inesperado: ${data.runtimeType}');
+      throw UnknownException(details: 'Formato inesperado: ${data.runtimeType}');
     }
 
     return resultsList.map((item) => Evento.fromJson(item as Map<String, dynamic>)).toList();

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
+import 'package:sggm/core/errors/error_handler.dart';
 import 'package:sggm/services/api_service.dart';
 import 'package:sggm/services/notification_service.dart';
 import 'package:sggm/services/secure_token_service.dart';
@@ -18,6 +19,7 @@ class AuthProvider extends ChangeNotifier {
   bool _isAdmin = false;
   String? _token;
   String? _refreshToken;
+  String? _errorMessage;
   Map<String, dynamic>? _userData;
 
   bool get isAuthenticated => _isAuthenticated;
@@ -26,6 +28,7 @@ class AuthProvider extends ChangeNotifier {
   bool get isAdmin => _isAdmin;
   String? get token => _token;
   String? get refreshToken => _refreshToken;
+  String? get errorMessage => _errorMessage;
   Map<String, dynamic>? get userData => _userData;
 
   AuthProvider({SecureTokenService? secureTokenService}) {
@@ -100,6 +103,7 @@ class AuthProvider extends ChangeNotifier {
 
   Future<bool> login(String username, String password) async {
     _isLoading = true;
+    _errorMessage = null; // ✅ CORREÇÃO 1: limpa erro anterior a cada tentativa
     notifyListeners();
 
     try {
@@ -154,7 +158,6 @@ class AuthProvider extends ChangeNotifier {
         );
 
         AppLogger.info('Login realizado com sucesso');
-
         await enviarFCMToken();
 
         _isLoading = false;
@@ -162,17 +165,24 @@ class AuthProvider extends ChangeNotifier {
         return true;
       }
 
+      // ✅ CORREÇÃO 2: status não-200 (401, 403, etc.) agora popula _errorMessage
       AppLogger.warning('Erro no login: ${response.statusCode}');
-      _isLoading = false;
-      notifyListeners();
-      return false;
-    } on DioException catch (e) {
-      AppLogger.error('Erro DioException no login', e);
+      final appException = ErrorHandler.handle(
+        DioException(
+          requestOptions: RequestOptions(path: AppConstants.loginPath),
+          response: response,
+          type: DioExceptionType.badResponse,
+        ),
+      );
+      _errorMessage = appException.message;
       _isLoading = false;
       notifyListeners();
       return false;
     } catch (e) {
-      AppLogger.error('Exceção no login', e);
+      // ✅ CORREÇÃO 3: um único catch trata DioException de rede e demais erros
+      final appException = ErrorHandler.handle(e);
+      _errorMessage = appException.message;
+      AppLogger.error('login exception', e);
       _isLoading = false;
       notifyListeners();
       return false;
@@ -465,6 +475,11 @@ class AuthProvider extends ChangeNotifier {
       AppLogger.error('Erro ao decodificar token', e);
       return null;
     }
+  }
+
+  void limparErro() {
+    _errorMessage = null;
+    notifyListeners();
   }
 
   void forceAuthStateUpdate() => notifyListeners();
