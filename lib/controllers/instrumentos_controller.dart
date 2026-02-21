@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:sggm/core/errors/app_exception.dart';
+import 'package:sggm/core/errors/error_handler.dart';
 import 'package:sggm/models/instrumentos.dart';
 import 'package:sggm/services/api_service.dart';
 import 'package:sggm/util/app_logger.dart';
@@ -18,20 +20,19 @@ class InstrumentosProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await ApiService.get('/api/instrumentos/', useAuth: true);
-
+      final response = await ApiService.get('/api/instrumentos/');
       AppLogger.debug('listarInstrumentos status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         _instrumentos = _parseInstrumentosList(response.data);
         AppLogger.info('${_instrumentos.length} instrumentos carregados');
       } else {
-        _errorMessage = 'Erro ${response.statusCode}';
-        AppLogger.warning(_errorMessage!);
+        throw _exceptionFromStatus(response.statusCode, 'Erro ao listar instrumentos');
       }
-    } catch (e, stackTrace) {
-      _errorMessage = 'Erro ao listar instrumentos: $e';
-      AppLogger.error('Erro ao listar instrumentos', e, stackTrace);
+    } catch (e) {
+      final appException = ErrorHandler.handle(e);
+      _errorMessage = appException.message;
+      AppLogger.error('listarInstrumentos', e);
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -45,7 +46,6 @@ class InstrumentosProvider extends ChangeNotifier {
 
     try {
       final response = await ApiService.post('/api/instrumentos/', body: instrumentoData);
-
       AppLogger.debug('adicionarInstrumento status: ${response.statusCode}');
 
       if (response.statusCode == 201) {
@@ -53,18 +53,14 @@ class InstrumentosProvider extends ChangeNotifier {
         _instrumentos.add(novoInstrumento);
         _instrumentos.sort((a, b) => a.nome.compareTo(b.nome));
         AppLogger.info('Instrumento adicionado: ID ${novoInstrumento.id}');
-        notifyListeners();
         return novoInstrumento;
       } else {
-        _errorMessage = 'Erro ${response.statusCode}';
-        AppLogger.warning(_errorMessage!);
-        notifyListeners();
-        return null;
+        throw _exceptionFromStatus(response.statusCode, 'Falha ao criar instrumento');
       }
-    } catch (e, stackTrace) {
-      _errorMessage = 'Erro ao adicionar instrumento: $e';
-      AppLogger.error('Erro ao adicionar instrumento', e, stackTrace);
-      notifyListeners();
+    } catch (e) {
+      final appException = ErrorHandler.handle(e);
+      _errorMessage = appException.message;
+      AppLogger.error('adicionarInstrumento', e);
       return null;
     } finally {
       _isLoading = false;
@@ -79,7 +75,6 @@ class InstrumentosProvider extends ChangeNotifier {
 
     try {
       final response = await ApiService.put('/api/instrumentos/$id/', body: instrumentoData);
-
       AppLogger.debug('atualizarInstrumento status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
@@ -87,15 +82,12 @@ class InstrumentosProvider extends ChangeNotifier {
         await listarInstrumentos();
         return true;
       } else {
-        _errorMessage = 'Erro ao atualizar instrumento';
-        AppLogger.warning(_errorMessage!);
-        notifyListeners();
-        return false;
+        throw _exceptionFromStatus(response.statusCode, 'Falha ao atualizar instrumento');
       }
-    } catch (e, stackTrace) {
-      _errorMessage = 'Erro ao atualizar instrumento: $e';
-      AppLogger.error('Erro ao atualizar instrumento ID $id', e, stackTrace);
-      notifyListeners();
+    } catch (e) {
+      final appException = ErrorHandler.handle(e);
+      _errorMessage = appException.message;
+      AppLogger.error('atualizarInstrumento $id', e);
       return false;
     } finally {
       _isLoading = false;
@@ -110,28 +102,43 @@ class InstrumentosProvider extends ChangeNotifier {
 
     try {
       final response = await ApiService.delete('/api/instrumentos/$id/');
-
       AppLogger.debug('deletarInstrumento status: ${response.statusCode}');
 
       if (response.statusCode == 204) {
         _instrumentos.removeWhere((inst) => inst.id == id);
         AppLogger.info('Instrumento deletado: ID $id');
-        notifyListeners();
         return true;
       } else {
-        _errorMessage = 'Erro ao deletar instrumento';
-        AppLogger.warning(_errorMessage!);
-        notifyListeners();
-        return false;
+        throw _exceptionFromStatus(response.statusCode, 'Falha ao deletar instrumento');
       }
-    } catch (e, stackTrace) {
-      _errorMessage = 'Erro ao deletar instrumento: $e';
-      AppLogger.error('Erro ao deletar instrumento ID $id', e, stackTrace);
-      notifyListeners();
+    } catch (e) {
+      final appException = ErrorHandler.handle(e);
+      _errorMessage = appException.message;
+      AppLogger.error('deletarInstrumento $id', e);
       return false;
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  // ── helpers ──────────────────────────────────────────────────────────────
+
+  AppException _exceptionFromStatus(int? statusCode, String fallback) {
+    switch (statusCode) {
+      case 401:
+        return const UnauthorizedException();
+      case 403:
+        return const ForbiddenException();
+      case 404:
+        return const NotFoundException();
+      case 422:
+        return const ValidationException();
+      default:
+        if (statusCode != null && statusCode >= 500) {
+          return ServerException(statusCode: statusCode);
+        }
+        return UnknownException(details: '$fallback (HTTP $statusCode)');
     }
   }
 
@@ -144,13 +151,13 @@ class InstrumentosProvider extends ChangeNotifier {
     } else if (data is List) {
       resultsList = data;
     } else {
-      throw Exception('Formato de resposta inesperado: ${data.runtimeType}');
+      throw UnknownException(details: 'Formato inesperado: ${data.runtimeType}');
     }
 
     return resultsList.map((json) => Instrumento.fromJson(json as Map<String, dynamic>)).toList();
   }
 
-  void clearError() {
+  void limparErro() {
     _errorMessage = null;
     notifyListeners();
   }
