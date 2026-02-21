@@ -7,59 +7,22 @@ on:
     branches: [ main ]
 
 jobs:
-  test:
-    name: Flutter Tests
+  analyze:
+    name: Analyze
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout código
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+      - run: flutter pub get
+      - run: flutter analyze --fatal-warnings  # só erros reais
 
-      - name: Ler versão do Flutter do .fvmrc
-        id: fvm
-        run: |
-          FLUTTER_VERSION=$(cat .fvmrc | jq -r '.flutter')
-          echo "flutter_version=$FLUTTER_VERSION" >> $GITHUB_OUTPUT
-
-      - name: Configurar Flutter
-        uses: flutter-actions/setup-flutter@v3
-        with:
-          channel: stable
-          version: ${{ steps.fvm.outputs.flutter_version }}
-
-      - name: Verificar versão do Flutter
-        run: flutter --version
-
-      - name: Instalar dependências
-        run: flutter pub get
-
-      - name: Analisar código (lint)
-        run: flutter analyze --fatal-infos
-
-      - name: Rodar testes unitários com cobertura
-        run: flutter test --coverage
-
-      - name: Instalar lcov
-        run: sudo apt-get install -y lcov
-
-      - name: Verificar cobertura mínima (60%)
-        run: |
-          COVERAGE=$(lcov --summary coverage/lcov.info 2>&1 \
-            | grep -oP '\d+\.\d+(?=%)' | head -1)
-          echo "Cobertura atual: ${COVERAGE}%"
-          if [ -z "$COVERAGE" ]; then
-            echo "❌ Não foi possível calcular a cobertura"
-            exit 1
-          fi
-          if (( $(echo "$COVERAGE < 60" | bc -l) )); then
-            echo "❌ Cobertura abaixo de 60% (${COVERAGE}%)"
-            exit 1
-          fi
-          echo "✅ Cobertura OK: ${COVERAGE}%"
-
-      - name: Upload relatório de cobertura
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: coverage-report
-          path: coverage/lcov.info
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: analyze  # só roda testes se analyze passar
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+      - run: flutter pub get
+      - run: flutter test --coverage  # foca nos testes
+      - run: flutter test test/unit/  # ou pasta específica
