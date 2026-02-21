@@ -7,6 +7,7 @@ import 'package:sggm/controllers/instrumentos_controller.dart';
 import 'package:sggm/controllers/musicos_controller.dart';
 import 'package:sggm/models/escalas.dart';
 import 'package:sggm/models/instrumentos.dart';
+import 'package:sggm/views/widgets/loading/shimmer_card.dart';
 
 class EscalasPage extends StatefulWidget {
   const EscalasPage({super.key});
@@ -16,8 +17,7 @@ class EscalasPage extends StatefulWidget {
 }
 
 class _EscalasPageState extends State<EscalasPage> {
-  bool _isLoading = true;
-  String _filtro = 'todas'; // 'todas', 'pendentes', 'confirmadas'
+  String _filtro = 'todas';
 
   @override
   void initState() {
@@ -28,27 +28,19 @@ class _EscalasPageState extends State<EscalasPage> {
   }
 
   Future<void> _carregarTudo() async {
-    setState(() => _isLoading = true);
     try {
-      final escalasProvider = Provider.of<EscalasProvider>(context, listen: false);
-      final musicosProvider = Provider.of<MusicosProvider>(context, listen: false);
-      final eventosProvider = Provider.of<EventoProvider>(context, listen: false);
-      final instrumentosProvider = Provider.of<InstrumentosProvider>(context, listen: false);
-
       await Future.wait([
-        escalasProvider.listarEscalas(),
-        musicosProvider.listarMusicos(),
-        eventosProvider.listarEventos(),
-        instrumentosProvider.listarInstrumentos(),
+        Provider.of<EscalasProvider>(context, listen: false).listarEscalas(),
+        Provider.of<MusicosProvider>(context, listen: false).listarMusicos(),
+        Provider.of<EventoProvider>(context, listen: false).listarEventos(),
+        Provider.of<InstrumentosProvider>(context, listen: false).listarInstrumentos(),
       ]);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Erro ao carregar escalas: $e'), backgroundColor: Colors.red),
         );
       }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -66,13 +58,10 @@ class _EscalasPageState extends State<EscalasPage> {
   Future<void> _confirmarPresenca(BuildContext context, Escala escala, bool confirmado) async {
     try {
       await context.read<EscalasProvider>().confirmarPresenca(escala.id!, confirmado);
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              confirmado ? '✅ Presença confirmada!' : '❌ Presença desmarcada',
-            ),
+            content: Text(confirmado ? 'Presença confirmada!' : 'Presença desmarcada'),
             backgroundColor: confirmado ? Colors.green : Colors.orange,
             duration: const Duration(seconds: 2),
           ),
@@ -81,10 +70,7 @@ class _EscalasPageState extends State<EscalasPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro: $e'),
-            backgroundColor: Colors.red,
-          ),
+          const SnackBar(content: Text('Erro ao confirmar presença'), backgroundColor: Colors.red),
         );
       }
     }
@@ -101,238 +87,212 @@ class _EscalasPageState extends State<EscalasPage> {
 
     showDialog(
       context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setStateDialog) {
-            return Dialog(
-              // ✅ Usar Dialog ao invés de AlertDialog para mais controle
-              insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Título
-                      const Text(
-                        'Nova Escala',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-
-                      // --- MÚSICO ---
-                      Consumer<MusicosProvider>(
-                        builder: (context, provider, child) {
-                          return DropdownButtonFormField<int>(
-                            decoration: const InputDecoration(
-                              labelText: 'Músico *',
-                              border: OutlineInputBorder(),
-                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            ),
-                            isExpanded: true,
-                            initialValue: selectedMusicoId,
-                            items: provider.musicos.map((musico) {
-                              return DropdownMenuItem<int>(
-                                value: musico.id,
-                                child: Text(
-                                  musico.nome,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              );
-                            }).toList(),
-                            onChanged: (valor) {
-                              setStateDialog(() {
-                                selectedMusicoId = valor;
-
-                                if (valor != null) {
-                                  final musico = provider.musicos.firstWhere((m) => m.id == valor);
-                                  final instProvider = Provider.of<InstrumentosProvider>(context, listen: false);
-
-                                  if (musico.instrumentoPrincipal != null &&
-                                      musico.instrumentoPrincipal.toString().isNotEmpty) {
-                                    bool existeNaLista = instProvider.instrumentos
-                                        .any((i) => i.nome == musico.instrumentoPrincipal.toString());
-
-                                    if (existeNaLista) {
-                                      selectedInstrumento = musico.instrumentoPrincipal.toString();
-                                      mostrarCampoOutro = false;
-                                    } else {
-                                      selectedInstrumento = 'Outro';
-                                      mostrarCampoOutro = true;
-                                      outroInstrumentoController.text = musico.instrumentoPrincipal.toString();
-                                    }
-                                  }
-                                }
-                              });
-                            },
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 16),
-
-                      // --- EVENTO ---
-                      Consumer<EventoProvider>(
-                        builder: (context, provider, child) {
-                          return DropdownButtonFormField<int>(
-                            decoration: const InputDecoration(
-                              labelText: 'Evento *',
-                              border: OutlineInputBorder(),
-                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            ),
-                            isExpanded: true,
-                            initialValue: selectedEventoId,
-                            items: provider.eventos.map((evento) {
-                              return DropdownMenuItem<int>(
-                                value: evento.id,
-                                child: Text(
-                                  '${evento.nome} (${evento.dataEvento.split('T')[0]})',
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              );
-                            }).toList(),
-                            onChanged: (valor) => setStateDialog(() => selectedEventoId = valor),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 16),
-
-                      // --- INSTRUMENTOS ---
-                      Consumer<InstrumentosProvider>(
-                        builder: (context, provider, child) {
-                          var listaOpcoes = provider.instrumentos.map((i) => i.nome).toList();
-                          listaOpcoes.add('Outro');
-
-                          return DropdownButtonFormField<String>(
-                            decoration: const InputDecoration(
-                              labelText: 'Instrumento *',
-                              border: OutlineInputBorder(),
-                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            ),
-                            isExpanded: true,
-                            initialValue: selectedInstrumento,
-                            items: listaOpcoes.map((nome) {
-                              return DropdownMenuItem<String>(
-                                value: nome,
-                                child: Text(
-                                  nome,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              );
-                            }).toList(),
-                            onChanged: (valor) {
-                              setStateDialog(() {
-                                selectedInstrumento = valor;
-                                mostrarCampoOutro = (valor == 'Outro');
-                                if (!mostrarCampoOutro) outroInstrumentoController.clear();
-                              });
-                            },
-                          );
-                        },
-                      ),
-
-                      if (mostrarCampoOutro) ...[
-                        const SizedBox(height: 16),
-                        TextField(
-                          controller: outroInstrumentoController,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setStateDialog) {
+          return Dialog(
+            insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Nova Escala',
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 20),
+                    Consumer<MusicosProvider>(
+                      builder: (context, provider, child) {
+                        return DropdownButtonFormField<int>(
                           decoration: const InputDecoration(
-                            labelText: 'Qual instrumento?',
-                            hintText: 'Digite o nome',
+                            labelText: 'Músico *',
                             border: OutlineInputBorder(),
                             contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           ),
-                        ),
-                      ],
-
+                          isExpanded: true,
+                          initialValue: selectedMusicoId,
+                          items: provider.musicos.map((musico) {
+                            return DropdownMenuItem<int>(
+                              value: musico.id,
+                              child: Text(musico.nome, overflow: TextOverflow.ellipsis),
+                            );
+                          }).toList(),
+                          onChanged: (valor) {
+                            setStateDialog(() {
+                              selectedMusicoId = valor;
+                              if (valor != null) {
+                                final musico = provider.musicos.firstWhere((m) => m.id == valor);
+                                final instProvider = Provider.of<InstrumentosProvider>(context, listen: false);
+                                if (musico.instrumentoPrincipal != null &&
+                                    musico.instrumentoPrincipal.toString().isNotEmpty) {
+                                  final existeNaLista = instProvider.instrumentos
+                                      .any((i) => i.nome == musico.instrumentoPrincipal.toString());
+                                  if (existeNaLista) {
+                                    selectedInstrumento = musico.instrumentoPrincipal.toString();
+                                    mostrarCampoOutro = false;
+                                  } else {
+                                    selectedInstrumento = 'Outro';
+                                    mostrarCampoOutro = true;
+                                    outroInstrumentoController.text = musico.instrumentoPrincipal.toString();
+                                  }
+                                }
+                              }
+                            });
+                          },
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    Consumer<EventoProvider>(
+                      builder: (context, provider, child) {
+                        return DropdownButtonFormField<int>(
+                          decoration: const InputDecoration(
+                            labelText: 'Evento *',
+                            border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          ),
+                          isExpanded: true,
+                          initialValue: selectedEventoId,
+                          items: provider.eventos.map((evento) {
+                            return DropdownMenuItem<int>(
+                              value: evento.id,
+                              child: Text(
+                                '${evento.nome} (${evento.dataEvento.split('T')[0]})',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (valor) => setStateDialog(() => selectedEventoId = valor),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    Consumer<InstrumentosProvider>(
+                      builder: (context, provider, child) {
+                        final listaOpcoes = [
+                          ...provider.instrumentos.map((i) => i.nome),
+                          'Outro',
+                        ];
+                        return DropdownButtonFormField<String>(
+                          decoration: const InputDecoration(
+                            labelText: 'Instrumento *',
+                            border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          ),
+                          isExpanded: true,
+                          initialValue: selectedInstrumento,
+                          items: listaOpcoes.map((nome) {
+                            return DropdownMenuItem<String>(
+                              value: nome,
+                              child: Text(nome, overflow: TextOverflow.ellipsis),
+                            );
+                          }).toList(),
+                          onChanged: (valor) {
+                            setStateDialog(() {
+                              selectedInstrumento = valor;
+                              mostrarCampoOutro = (valor == 'Outro');
+                              if (!mostrarCampoOutro) outroInstrumentoController.clear();
+                            });
+                          },
+                        );
+                      },
+                    ),
+                    if (mostrarCampoOutro) ...[
                       const SizedBox(height: 16),
-
                       TextField(
-                        controller: obsController,
+                        controller: outroInstrumentoController,
                         decoration: const InputDecoration(
-                          labelText: 'Observação (opcional)',
+                          labelText: 'Qual instrumento?',
+                          hintText: 'Digite o nome',
                           border: OutlineInputBorder(),
                           contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         ),
-                        maxLines: 2,
                       ),
-
-                      const SizedBox(height: 24),
-
-                      // Botões
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          TextButton(
-                            onPressed: () => Navigator.of(ctx).pop(),
-                            child: const Text('Cancelar'),
-                          ),
-                          const SizedBox(width: 8),
-                          ElevatedButton(
-                            onPressed: () {
-                              if (selectedMusicoId == null || selectedEventoId == null || selectedInstrumento == null) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Preencha os campos obrigatórios!')),
-                                );
-                                return;
-                              }
-
-                              int? instrumentoIdFinal;
-
-                              if (selectedInstrumento == 'Outro') {
-                                if (outroInstrumentoController.text.isEmpty) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Digite o instrumento!')),
-                                  );
-                                  return;
-                                }
-                                instrumentoIdFinal = null;
-                              } else {
-                                final instProvider = Provider.of<InstrumentosProvider>(context, listen: false);
-                                final instrumento = instProvider.instrumentos.firstWhere(
-                                  (i) => i.nome == selectedInstrumento,
-                                  orElse: () => Instrumento(id: 0, nome: ''),
-                                );
-                                instrumentoIdFinal = instrumento.id;
-                              }
-
-                              final novaEscala = Escala(
-                                musicoId: selectedMusicoId!,
-                                eventoId: selectedEventoId!,
-                                instrumentoNoEvento: instrumentoIdFinal,
-                                observacao: obsController.text,
+                    ],
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: obsController,
+                      decoration: const InputDecoration(
+                        labelText: 'Observação (opcional)',
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                      maxLines: 2,
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.of(ctx).pop(),
+                          child: const Text('Cancelar'),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () async {
+                            if (selectedMusicoId == null || selectedEventoId == null || selectedInstrumento == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Preencha os campos obrigatórios!')),
                               );
+                              return;
+                            }
 
-                              Provider.of<EscalasProvider>(context, listen: false)
-                                  .adicionarEscala(novaEscala)
-                                  .then((_) {
+                            if (selectedInstrumento == 'Outro' && outroInstrumentoController.text.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Digite o instrumento!')),
+                              );
+                              return;
+                            }
+
+                            int? instrumentoIdFinal;
+                            if (selectedInstrumento != 'Outro') {
+                              final instProvider = Provider.of<InstrumentosProvider>(context, listen: false);
+                              final instrumento = instProvider.instrumentos.firstWhere(
+                                (i) => i.nome == selectedInstrumento,
+                                orElse: () => Instrumento(id: 0, nome: ''),
+                              );
+                              instrumentoIdFinal = instrumento.id;
+                            }
+
+                            final novaEscala = Escala(
+                              musicoId: selectedMusicoId!,
+                              eventoId: selectedEventoId!,
+                              instrumentoNoEvento: instrumentoIdFinal,
+                              observacao: obsController.text,
+                            );
+
+                            try {
+                              await Provider.of<EscalasProvider>(context, listen: false).adicionarEscala(novaEscala);
+                              if (ctx.mounted) {
                                 Navigator.of(ctx).pop();
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text('✅ Escala criada com sucesso!'),
+                                    content: Text('Escala criada com sucesso!'),
                                     backgroundColor: Colors.green,
                                   ),
                                 );
-                              }).catchError((e) {
+                              }
+                            } catch (e) {
+                              if (ctx.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Erro: $e')),
+                                  const SnackBar(content: Text('Erro ao criar escala')),
                                 );
-                              });
-                            },
-                            child: const Text('Salvar'),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                              }
+                            }
+                          },
+                          child: const Text('Salvar'),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-            );
-          },
-        );
-      },
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -371,7 +331,6 @@ class _EscalasPageState extends State<EscalasPage> {
   }
 
   Widget _buildEscalaCard(BuildContext context, Escala escala, bool isLider, int? currentUserId) {
-    // Verificar se é a escala do próprio músico
     final isMinhaEscala = currentUserId != null && escala.musicoId == currentUserId;
 
     return Card(
@@ -383,7 +342,6 @@ class _EscalasPageState extends State<EscalasPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Cabeçalho com status
             Row(
               children: [
                 Icon(
@@ -398,10 +356,7 @@ class _EscalasPageState extends State<EscalasPage> {
                     children: [
                       Text(
                         escala.eventoNome ?? 'Evento #${escala.eventoId}',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       Text(
                         escala.confirmado ? 'Confirmado' : 'Pendente',
@@ -413,7 +368,6 @@ class _EscalasPageState extends State<EscalasPage> {
                     ],
                   ),
                 ),
-                // Botão de deletar - Só para líder/admin
                 if (isLider)
                   IconButton(
                     icon: const Icon(Icons.delete_outline, color: Colors.red),
@@ -421,18 +375,11 @@ class _EscalasPageState extends State<EscalasPage> {
                   ),
               ],
             ),
-
             const Divider(height: 24),
-
-            // Informações - APENAS campos que existem
             _buildInfoRow(Icons.person, escala.musicoNome ?? 'Músico #${escala.musicoId}'),
-
             if (escala.instrumentoNoEvento != null) _buildInfoRow(Icons.music_note, escala.instrumentoNome.toString()),
-
             if (escala.observacao != null && escala.observacao!.isNotEmpty)
               _buildInfoRow(Icons.note, escala.observacao!),
-
-            // Botão de confirmar - Apenas para o próprio músico ou líder
             if (isMinhaEscala || isLider) ...[
               const SizedBox(height: 16),
               SizedBox(
@@ -440,16 +387,12 @@ class _EscalasPageState extends State<EscalasPage> {
                 child: ElevatedButton.icon(
                   onPressed: () => _confirmarPresenca(context, escala, !escala.confirmado),
                   icon: Icon(escala.confirmado ? Icons.cancel : Icons.check),
-                  label: Text(
-                    escala.confirmado ? 'Desmarcar Presença' : 'Confirmar Presença',
-                  ),
+                  label: Text(escala.confirmado ? 'Desmarcar Presença' : 'Confirmar Presença'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: escala.confirmado ? Colors.orange : Colors.green,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                 ),
               ),
@@ -468,10 +411,7 @@ class _EscalasPageState extends State<EscalasPage> {
           Icon(icon, size: 20, color: Colors.grey[600]),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
-              text,
-              style: TextStyle(color: Colors.grey[800]),
-            ),
+            child: Text(text, style: TextStyle(color: Colors.grey[800])),
           ),
         ],
       ),
@@ -483,19 +423,35 @@ class _EscalasPageState extends State<EscalasPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Confirmar Exclusão'),
-        content: Text(
-          'Deseja remover ${escala.musicoNome ?? "este músico"} da escala?',
-        ),
+        content: Text('Deseja remover ${escala.musicoNome ?? "este músico"} da escala?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(ctx);
-              if (escala.id != null) {
-                context.read<EscalasProvider>().deletarEscala(escala.id!);
+              if (escala.id == null) return;
+              try {
+                await context.read<EscalasProvider>().deletarEscala(escala.id!);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Escala removida com sucesso'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Erro ao remover escala'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
@@ -530,63 +486,68 @@ class _EscalasPageState extends State<EscalasPage> {
               child: const Icon(Icons.add),
             )
           : null,
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Consumer<EscalasProvider>(
-              builder: (context, provider, child) {
-                if (provider.escalas.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.event_busy, size: 64, color: Colors.grey[400]),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Nenhuma escala registrada',
-                          style: TextStyle(fontSize: 18, color: Colors.grey),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          isLider ? 'Toque no + para criar uma escala' : 'Aguarde ser escalado pelo líder',
-                          style: const TextStyle(fontSize: 14, color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                  );
-                }
+      body: Consumer<EscalasProvider>(
+        builder: (context, provider, child) {
+          if (provider.isLoading) {
+            return ListView.builder(
+              itemCount: 4,
+              itemBuilder: (_, __) => const ShimmerCard(height: 160),
+            );
+          }
 
-                final escalasFiltradas = _filtrarEscalas(provider.escalas);
+          if (provider.escalas.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.event_busy, size: 64, color: Colors.grey[400]),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Nenhuma escala registrada',
+                    style: TextStyle(fontSize: 18, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    isLider ? 'Toque no + para criar uma escala' : 'Aguarde ser escalado pelo líder',
+                    style: const TextStyle(fontSize: 14, color: Colors.grey),
+                  ),
+                ],
+              ),
+            );
+          }
 
-                return Column(
-                  children: [
-                    _buildFiltros(),
-                    Expanded(
-                      child: escalasFiltradas.isEmpty
-                          ? Center(
-                              child: Text(
-                                'Nenhuma escala $_filtro',
-                                style: const TextStyle(fontSize: 16, color: Colors.grey),
-                              ),
-                            )
-                          : RefreshIndicator(
-                              onRefresh: _carregarTudo,
-                              child: ListView.builder(
-                                itemCount: escalasFiltradas.length,
-                                itemBuilder: (context, index) {
-                                  return _buildEscalaCard(
-                                    context,
-                                    escalasFiltradas[index],
-                                    isLider,
-                                    currentUserId,
-                                  );
-                                },
-                              ),
-                            ),
-                    ),
-                  ],
-                );
-              },
-            ),
+          final escalasFiltradas = _filtrarEscalas(provider.escalas);
+
+          return Column(
+            children: [
+              _buildFiltros(),
+              Expanded(
+                child: escalasFiltradas.isEmpty
+                    ? Center(
+                        child: Text(
+                          'Nenhuma escala $_filtro',
+                          style: const TextStyle(fontSize: 16, color: Colors.grey),
+                        ),
+                      )
+                    : RefreshIndicator(
+                        onRefresh: _carregarTudo,
+                        child: ListView.builder(
+                          itemCount: escalasFiltradas.length,
+                          itemBuilder: (context, index) {
+                            return _buildEscalaCard(
+                              context,
+                              escalasFiltradas[index],
+                              isLider,
+                              currentUserId,
+                            );
+                          },
+                        ),
+                      ),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 }

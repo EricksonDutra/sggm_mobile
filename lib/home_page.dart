@@ -9,11 +9,11 @@ import 'package:sggm/views/musicas_page.dart';
 import 'package:sggm/views/login_page.dart';
 import 'package:sggm/views/perfil_edit_page.dart';
 import 'package:sggm/views/mudar_senha_page.dart';
+import 'package:sggm/views/widgets/loading/loading_overlay.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
-  // ✅ MANTIDO: Navegar para o próprio perfil
   void _abrirMeuPerfil(BuildContext context) async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final musicosProvider = Provider.of<MusicosProvider>(context, listen: false);
@@ -29,39 +29,51 @@ class HomePage extends StatelessWidget {
       return;
     }
 
-    // Mostrar loading
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => const Center(child: CircularProgressIndicator()),
-    );
+    LoadingOverlay.show(context, message: 'Carregando perfil...');
 
-    // Buscar dados do músico
-    await musicosProvider.listarMusicos();
+    try {
+      await musicosProvider.listarMusicos();
+    } catch (e) {
+      if (context.mounted) {
+        LoadingOverlay.hide(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Erro ao carregar perfil'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
 
     if (!context.mounted) return;
-    Navigator.pop(context); // Fechar loading
+    LoadingOverlay.hide(context);
 
-    // Encontrar o músico na lista
-    final musico = musicosProvider.musicos.firstWhere(
-      (m) => m.id == musicoId,
-      orElse: () => throw Exception('Músico não encontrado'),
-    );
+    try {
+      final musico = musicosProvider.musicos.firstWhere((m) => m.id == musicoId);
 
-    // Navegar para edição
-    final resultado = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => PerfilEditPage(
-          musico: musico,
-          isOwnProfile: true,
+      final resultado = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PerfilEditPage(
+            musico: musico,
+            isOwnProfile: true,
+          ),
         ),
-      ),
-    );
+      );
 
-    // Recarregar dados se houve alteração
-    if (resultado == true) {
-      await musicosProvider.listarMusicos();
+      if (resultado == true) {
+        await musicosProvider.listarMusicos();
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Músico não encontrado'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -83,7 +95,6 @@ class HomePage extends StatelessWidget {
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
-          // ✅ ATUALIZADO: PopupMenu com mais opções
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert, color: Colors.white70),
             tooltip: 'Opções',
@@ -99,9 +110,7 @@ class HomePage extends StatelessWidget {
               } else if (value == 'senha') {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (context) => const MudarSenhaPage(),
-                  ),
+                  MaterialPageRoute(builder: (context) => const MudarSenhaPage()),
                 );
               } else if (value == 'logout') {
                 Provider.of<AuthProvider>(context, listen: false).logout();
@@ -118,10 +127,7 @@ class HomePage extends StatelessWidget {
                   children: [
                     Icon(Icons.account_circle, color: Colors.white70, size: 20),
                     SizedBox(width: 12),
-                    Text(
-                      'Meu Perfil',
-                      style: TextStyle(color: Colors.white),
-                    ),
+                    Text('Meu Perfil', style: TextStyle(color: Colors.white)),
                   ],
                 ),
               ),
@@ -131,10 +137,7 @@ class HomePage extends StatelessWidget {
                   children: [
                     Icon(Icons.lock_reset, color: Colors.white70, size: 20),
                     SizedBox(width: 12),
-                    Text(
-                      'Mudar Senha',
-                      style: TextStyle(color: Colors.white),
-                    ),
+                    Text('Mudar Senha', style: TextStyle(color: Colors.white)),
                   ],
                 ),
               ),
@@ -145,10 +148,7 @@ class HomePage extends StatelessWidget {
                   children: [
                     Icon(Icons.logout, color: Colors.red, size: 20),
                     SizedBox(width: 12),
-                    Text(
-                      'Sair',
-                      style: TextStyle(color: Colors.red),
-                    ),
+                    Text('Sair', style: TextStyle(color: Colors.red)),
                   ],
                 ),
               ),
@@ -161,10 +161,7 @@ class HomePage extends StatelessWidget {
           Positioned.fill(
             child: Opacity(
               opacity: 0.3,
-              child: Image.asset(
-                'assets/wave.jpg',
-                fit: BoxFit.cover,
-              ),
+              child: Image.asset('assets/wave.jpg', fit: BoxFit.cover),
             ),
           ),
           SafeArea(
@@ -174,8 +171,6 @@ class HomePage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 20),
-
-                  // ✅ MANTIDO: Consumer com nome e badge
                   Consumer<AuthProvider>(
                     builder: (context, auth, child) {
                       final nome = auth.userData?['nome'] ?? 'Usuário';
@@ -183,9 +178,9 @@ class HomePage extends StatelessWidget {
 
                       String badge = '';
                       if (tipoUsuario == 'ADMIN') {
-                        badge = '👑 Admin';
+                        badge = 'Admin';
                       } else if (tipoUsuario == 'LIDER') {
-                        badge = '⭐ Líder';
+                        badge = 'Líder';
                       }
 
                       return Column(
@@ -237,10 +232,7 @@ class HomePage extends StatelessWidget {
                       );
                     },
                   ),
-
                   const SizedBox(height: 40),
-
-                  // ✅ MANTIDO: Grid de Menu
                   Expanded(
                     child: GridView.count(
                       crossAxisCount: 2,
@@ -304,10 +296,7 @@ class HomePage extends StatelessWidget {
           decoration: BoxDecoration(
             color: const Color(0xFF1E1E1E),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: Colors.white24,
-              width: 1,
-            ),
+            border: Border.all(color: Colors.white24, width: 1),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.3),

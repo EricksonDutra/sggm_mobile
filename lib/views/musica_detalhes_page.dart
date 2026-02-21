@@ -27,18 +27,14 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
   void initState() {
     super.initState();
     _tomAtual = widget.musica.tom;
-
     _hasYoutube = widget.musica.linkYoutube != null && widget.musica.linkYoutube!.isNotEmpty;
     _hasCifra = widget.musica.linkCifra != null && widget.musica.linkCifra!.isNotEmpty;
 
-    // Determina quantas abas mostrar
     int tabCount = 0;
     if (_hasYoutube) tabCount++;
     if (_hasCifra) tabCount++;
-
     _tabController = TabController(length: tabCount > 0 ? tabCount : 1, vsync: this);
 
-    // Inicializa o YouTube Player se houver link
     if (_hasYoutube) {
       final videoId = YoutubePlayer.convertUrlToId(widget.musica.linkYoutube!);
       if (videoId != null) {
@@ -53,7 +49,6 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
       }
     }
 
-    // Inicializa o WebView para cifra
     if (_hasCifra && widget.musica.linkCifra != null) {
       _initializeWebView();
     }
@@ -69,7 +64,7 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Tom original: '),
+            const Text('Tom original:'),
             Text(
               widget.musica.tom ?? 'Não informado',
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
@@ -98,74 +93,42 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
   }
 
   void _initializeWebView() {
-    if (_webViewInitialized || !_hasCifra || widget.musica.linkCifra == null) {
-      return;
-    }
+    if (_webViewInitialized || !_hasCifra || widget.musica.linkCifra == null) return;
 
-    setState(() {
-      _isLoadingWebView = true;
-    });
+    setState(() => _isLoadingWebView = true);
 
     try {
       _webViewController = WebViewController()
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
-        ..setBackgroundColor(Colors.grey[100]!) // ✅ Fundo cinza claro
+        ..setBackgroundColor(Colors.grey[100]!)
         ..setNavigationDelegate(
           NavigationDelegate(
-            onProgress: (int progress) {
-              debugPrint('WebView carregando: $progress%');
-            },
-            onPageStarted: (String url) {
-              debugPrint('WebView iniciou carregamento: $url');
-            },
             onPageFinished: (String url) {
-              // ✅ Injeta CSS para forçar fundo claro no conteúdo
-              final controller = _webViewController;
-              if (controller != null) {
-                controller.runJavaScript('''
-                  document.body.style.backgroundColor = '#f5f5f5';
-                  document.body.style.color = '#000000';
-                ''');
-              }
-
-              if (mounted) {
-                setState(() {
-                  _isLoadingWebView = false;
-                });
-              }
-              debugPrint('WebView finalizou carregamento: $url');
+              _webViewController?.runJavaScript('''
+                document.body.style.backgroundColor = '#f5f5f5';
+                document.body.style.color = '#000000';
+              ''');
+              if (mounted) setState(() => _isLoadingWebView = false);
             },
             onWebResourceError: (WebResourceError error) {
-              debugPrint('WebView Error: ${error.description}');
               if (mounted) {
-                setState(() {
-                  _isLoadingWebView = false;
-                });
+                setState(() => _isLoadingWebView = false);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Erro ao carregar cifra: ${error.description}'),
+                  const SnackBar(
+                    content: Text('Erro ao carregar a cifra'),
                     backgroundColor: Colors.orange,
                   ),
                 );
               }
             },
-            onNavigationRequest: (NavigationRequest request) {
-              return NavigationDecision.navigate;
-            },
+            onNavigationRequest: (_) => NavigationDecision.navigate,
           ),
         )
         ..loadRequest(Uri.parse(widget.musica.linkCifra!));
 
-      setState(() {
-        _webViewInitialized = true;
-      });
+      setState(() => _webViewInitialized = true);
     } catch (e) {
-      debugPrint('Erro ao inicializar WebView: $e');
-      if (mounted) {
-        setState(() {
-          _isLoadingWebView = false;
-        });
-      }
+      if (mounted) setState(() => _isLoadingWebView = false);
     }
   }
 
@@ -223,10 +186,7 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
           children: [
             Icon(Icons.error_outline, size: 64, color: Colors.red),
             SizedBox(height: 16),
-            Text(
-              'Link do YouTube inválido',
-              style: TextStyle(fontSize: 16, color: Colors.grey),
-            ),
+            Text('Link do YouTube inválido', style: TextStyle(fontSize: 16, color: Colors.grey)),
           ],
         ),
       );
@@ -271,18 +231,20 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
   }
 
   Widget _buildCifraTab() {
-    // ✅ Verifica se o WebView foi inicializado
     if (_webViewController == null) {
       return Container(
         color: Colors.grey[100],
         child: const Center(
-          child: CircularProgressIndicator(),
+          child: Text(
+            'Não foi possível carregar a cifra',
+            style: TextStyle(color: Colors.grey),
+          ),
         ),
       );
     }
 
     return Container(
-      color: Colors.grey[100], // ✅ Fundo claro
+      color: Colors.grey[100],
       child: Column(
         children: [
           Container(
@@ -333,9 +295,7 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
                 if (_isLoadingWebView)
                   Container(
                     color: Colors.grey[100],
-                    child: const Center(
-                      child: CircularProgressIndicator(),
-                    ),
+                    child: const LinearProgressIndicator(),
                   ),
               ],
             ),
@@ -390,15 +350,9 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
       children: [
         Icon(icon, size: 20, color: Colors.grey[600]),
         const SizedBox(width: 8),
-        Text(
-          '$label: ',
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
+        Text('$label: ', style: const TextStyle(fontWeight: FontWeight.bold)),
         Expanded(
-          child: Text(
-            value,
-            style: const TextStyle(color: Colors.grey),
-          ),
+          child: Text(value, style: const TextStyle(color: Colors.grey)),
         ),
       ],
     );

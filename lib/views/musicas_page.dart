@@ -5,6 +5,7 @@ import 'package:sggm/controllers/musicas_controller.dart';
 import 'package:sggm/models/artista.dart';
 import 'package:sggm/models/musicas.dart';
 import 'package:sggm/views/widgets/artista_selector_widget.dart';
+import 'package:sggm/views/widgets/loading/shimmer_list_tile.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class MusicasPage extends StatefulWidget {
@@ -15,8 +16,6 @@ class MusicasPage extends StatefulWidget {
 }
 
 class _MusicasPageState extends State<MusicasPage> {
-  bool _isLoading = true;
-
   @override
   void initState() {
     super.initState();
@@ -26,7 +25,6 @@ class _MusicasPageState extends State<MusicasPage> {
   }
 
   Future<void> _carregarMusicas() async {
-    setState(() => _isLoading = true);
     try {
       await Provider.of<MusicasProvider>(context, listen: false).listarMusicas();
     } catch (e) {
@@ -37,10 +35,6 @@ class _MusicasPageState extends State<MusicasPage> {
             backgroundColor: Colors.red,
           ),
         );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
       }
     }
   }
@@ -79,16 +73,11 @@ class _MusicasPageState extends State<MusicasPage> {
                     textCapitalization: TextCapitalization.words,
                   ),
                   const SizedBox(height: 16),
-
-                  // ✅ CORRIGIDO: Sem espaço antes do parêntese
                   ArtistaSelectorWidget(
                     onArtistaSelected: (artista) {
-                      setDialogState(() {
-                        artistaSelecionado = artista;
-                      });
+                      setDialogState(() => artistaSelecionado = artista);
                     },
                   ),
-
                   const SizedBox(height: 16),
                   TextField(
                     controller: tomController,
@@ -134,7 +123,7 @@ class _MusicasPageState extends State<MusicasPage> {
             ElevatedButton.icon(
               icon: const Icon(Icons.check),
               label: const Text('Salvar'),
-              onPressed: () {
+              onPressed: () async {
                 if (tituloController.text.trim().isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
@@ -165,23 +154,27 @@ class _MusicasPageState extends State<MusicasPage> {
                   linkYoutube: linkYoutubeController.text.trim().isEmpty ? null : linkYoutubeController.text.trim(),
                 );
 
-                Provider.of<MusicasProvider>(context, listen: false).adicionarMusica(novaMusica).then((_) {
-                  Navigator.of(ctx).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Música "${novaMusica.titulo}" adicionada!'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                }).catchError((e) {
-                  Navigator.of(ctx).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Erro ao adicionar: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                });
+                try {
+                  await Provider.of<MusicasProvider>(context, listen: false).adicionarMusica(novaMusica);
+                  if (ctx.mounted) {
+                    Navigator.of(ctx).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Música "${novaMusica.titulo}" adicionada!'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (ctx.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Erro ao adicionar música'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
               },
             ),
           ],
@@ -210,7 +203,7 @@ class _MusicasPageState extends State<MusicasPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Link inválido: $e')),
+          const SnackBar(content: Text('Link inválido')),
         );
       }
     }
@@ -228,23 +221,28 @@ class _MusicasPageState extends State<MusicasPage> {
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.of(ctx).pop();
-              Provider.of<MusicasProvider>(context, listen: false).deletarMusica(musica.id!).then((_) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Música excluída com sucesso!'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              }).catchError((e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Erro ao excluir: $e'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              });
+              try {
+                await Provider.of<MusicasProvider>(context, listen: false).deletarMusica(musica.id!);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Música excluída com sucesso!'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Erro ao excluir música'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
@@ -271,7 +269,7 @@ class _MusicasPageState extends State<MusicasPage> {
             icon: const Icon(Icons.refresh),
             onPressed: _carregarMusicas,
             tooltip: 'Atualizar',
-          )
+          ),
         ],
       ),
       floatingActionButton: isLider
@@ -281,139 +279,129 @@ class _MusicasPageState extends State<MusicasPage> {
               child: const Icon(Icons.add),
             )
           : null,
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Consumer<MusicasProvider>(
-              builder: (context, provider, child) {
-                if (provider.musicas.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.music_note_outlined,
-                          size: 64,
-                          color: Colors.grey,
+      body: Consumer<MusicasProvider>(
+        builder: (context, provider, child) {
+          if (provider.isLoading) {
+            return ListView.builder(
+              padding: const EdgeInsets.all(8),
+              itemCount: 5,
+              itemBuilder: (_, __) => const ShimmerListTile(showAvatar: true, showTrailing: true),
+            );
+          }
+
+          if (provider.musicas.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.music_note_outlined, size: 64, color: Colors.grey),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Nenhuma música cadastrada',
+                    style: TextStyle(fontSize: 18, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    isLider ? 'Toque no + para adicionar' : 'Aguarde o líder adicionar músicas',
+                    style: const TextStyle(fontSize: 14, color: Colors.grey),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return RefreshIndicator(
+            onRefresh: _carregarMusicas,
+            child: ListView.builder(
+              padding: const EdgeInsets.all(8),
+              itemCount: provider.musicas.length,
+              itemBuilder: (context, index) {
+                final musica = provider.musicas[index];
+
+                return Card(
+                  elevation: 2,
+                  margin: const EdgeInsets.symmetric(vertical: 5),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.teal,
+                      child: Text(
+                        musica.tom?.isNotEmpty == true ? musica.tom! : '?',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
                         ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Nenhuma música cadastrada',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: Colors.grey,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          isLider ? 'Toque no + para adicionar' : 'Aguarde o líder adicionar músicas',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  );
-                }
-
-                return RefreshIndicator(
-                  onRefresh: _carregarMusicas,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(8),
-                    itemCount: provider.musicas.length,
-                    itemBuilder: (context, index) {
-                      final musica = provider.musicas[index];
-
-                      return Card(
-                        elevation: 2,
-                        margin: const EdgeInsets.symmetric(vertical: 5),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: Colors.teal,
-                            child: Text(
-                              musica.tom?.isNotEmpty == true ? musica.tom! : '?',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ),
-                          title: Text(
-                            musica.titulo,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                    title: Text(
+                      musica.titulo,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(musica.artistaNome),
+                        if (musica.linkCifra != null && musica.linkCifra!.isNotEmpty)
+                          const Row(
                             children: [
-                              Text(musica.artistaNome),
-                              if (musica.linkCifra != null && musica.linkCifra!.isNotEmpty)
-                                const Row(
-                                  children: [
-                                    Icon(Icons.link, size: 12, color: Colors.blue),
-                                    SizedBox(width: 4),
-                                    Text(
-                                      'Cifra disponível',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.blue,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                              Icon(Icons.link, size: 12, color: Colors.blue),
+                              SizedBox(width: 4),
+                              Text(
+                                'Cifra disponível',
+                                style: TextStyle(fontSize: 11, color: Colors.blue),
+                              ),
                             ],
                           ),
-                          trailing: isLider
-                              ? PopupMenuButton<String>(
-                                  onSelected: (value) {
-                                    if (value == 'cifra') {
-                                      _abrirCifra(musica.linkCifra);
-                                    } else if (value == 'excluir') {
-                                      _confirmarExclusao(musica);
-                                    }
-                                  },
-                                  itemBuilder: (context) => [
-                                    if (musica.linkCifra != null && musica.linkCifra!.isNotEmpty)
-                                      const PopupMenuItem(
-                                        value: 'cifra',
-                                        child: Row(
-                                          children: [
-                                            Icon(Icons.open_in_browser, size: 18),
-                                            SizedBox(width: 8),
-                                            Text('Abrir Cifra'),
-                                          ],
-                                        ),
-                                      ),
-                                    const PopupMenuItem(
-                                      value: 'excluir',
-                                      child: Row(
-                                        children: [
-                                          Icon(Icons.delete_outline, size: 18, color: Colors.red),
-                                          SizedBox(width: 8),
-                                          Text(
-                                            'Excluir',
-                                            style: TextStyle(color: Colors.red),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
+                      ],
+                    ),
+                    trailing: isLider
+                        ? PopupMenuButton<String>(
+                            onSelected: (value) {
+                              if (value == 'cifra') {
+                                _abrirCifra(musica.linkCifra);
+                              } else if (value == 'excluir') {
+                                _confirmarExclusao(musica);
+                              }
+                            },
+                            itemBuilder: (context) => [
+                              if (musica.linkCifra != null && musica.linkCifra!.isNotEmpty)
+                                const PopupMenuItem(
+                                  value: 'cifra',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.open_in_browser, size: 18),
+                                      SizedBox(width: 8),
+                                      Text('Abrir Cifra'),
+                                    ],
+                                  ),
+                                ),
+                              const PopupMenuItem(
+                                value: 'excluir',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                                    SizedBox(width: 8),
+                                    Text('Excluir', style: TextStyle(color: Colors.red)),
                                   ],
-                                )
-                              : (musica.linkCifra != null && musica.linkCifra!.isNotEmpty)
-                                  ? IconButton(
-                                      icon: const Icon(Icons.open_in_browser, color: Colors.blue),
-                                      tooltip: 'Abrir Cifra',
-                                      onPressed: () => _abrirCifra(musica.linkCifra),
-                                    )
-                                  : null,
-                          onTap: () => _abrirCifra(musica.linkCifra),
-                        ),
-                      );
-                    },
+                                ),
+                              ),
+                            ],
+                          )
+                        : (musica.linkCifra != null && musica.linkCifra!.isNotEmpty)
+                            ? IconButton(
+                                icon: const Icon(Icons.open_in_browser, color: Colors.blue),
+                                tooltip: 'Abrir Cifra',
+                                onPressed: () => _abrirCifra(musica.linkCifra),
+                              )
+                            : null,
+                    onTap: () => _abrirCifra(musica.linkCifra),
                   ),
                 );
               },
             ),
+          );
+        },
+      ),
     );
   }
 }
