@@ -17,7 +17,9 @@ jobs:
 
       - name: Ler versão do Flutter do .fvmrc
         id: fvm
-        run: echo "flutter_version=$(cat .fvmrc | python3 -c \"import sys,json; print(json.load(sys.stdin)['flutter'])\")" >> $GITHUB_OUTPUT
+        run: |
+          FLUTTER_VERSION=$(cat .fvmrc | jq -r '.flutter')
+          echo "flutter_version=$FLUTTER_VERSION" >> $GITHUB_OUTPUT
 
       - name: Configurar Flutter
         uses: flutter-actions/setup-flutter@v3
