@@ -12,17 +12,89 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: subosito/flutter-action@v2
-      - run: flutter pub get
-      - run: flutter analyze --fatal-warnings  # só erros reais
+        with:
+          cache: true
+
+      - name: Instalar dependências
+        run: flutter pub get
+
+      - name: Criar firebase_options.dart
+        run: |
+          cat > lib/firebase_options.dart << 'EOF'
+          // Gerado automaticamente pelo CI via GitHub Secrets
+          // ignore_for_file: lines_longer_than_80_chars, avoid_classes_with_only_static_members
+          import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
+          import 'package:flutter/foundation.dart'
+              show defaultTargetPlatform, kIsWeb, TargetPlatform;
+
+          class DefaultFirebaseOptions {
+            static FirebaseOptions get currentPlatform {
+              if (kIsWeb) return android;
+              switch (defaultTargetPlatform) {
+                case TargetPlatform.android:
+                  return android;
+                case TargetPlatform.iOS:
+                  return android;
+                default:
+                  return android;
+              }
+            }
+
+            static const FirebaseOptions android = FirebaseOptions(
+              apiKey: '${{ secrets.FIREBASE_API_KEY }}',
+              appId: '${{ secrets.FIREBASE_APP_ID }}',
+              messagingSenderId: '${{ secrets.FIREBASE_SENDER_ID }}',
+              projectId: '${{ secrets.FIREBASE_PROJECT_ID }}',
+            );
+          }
+          EOF
+
+      - name: Flutter Analyze
+        run: flutter analyze --fatal-warnings
 
   test:
     name: Test
     runs-on: ubuntu-latest
-    needs: analyze  # só roda testes se analyze passar
+    needs: analyze
     steps:
       - uses: actions/checkout@v4
+
       - uses: subosito/flutter-action@v2
-      - run: flutter pub get
-      - run: flutter test --coverage  # foca nos testes
-      - run: flutter test test/unit/  # ou pasta específica
+        with:
+          cache: true
+
+      - name: Instalar dependências
+        run: flutter pub get
+
+      - name: Criar firebase_options.dart
+        run: |
+          cat > lib/firebase_options.dart << 'EOF'
+          // ignore_for_file: lines_longer_than_80_chars, avoid_classes_with_only_static_members
+          import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
+          import 'package:flutter/foundation.dart'
+              show defaultTargetPlatform, kIsWeb, TargetPlatform;
+
+          class DefaultFirebaseOptions {
+            static FirebaseOptions get currentPlatform {
+              if (kIsWeb) return android;
+              switch (defaultTargetPlatform) {
+                case TargetPlatform.android:
+                  return android;
+                default:
+                  return android;
+              }
+            }
+
+            static const FirebaseOptions android = FirebaseOptions(
+              apiKey: '${{ secrets.FIREBASE_API_KEY }}',
+              appId: '${{ secrets.FIREBASE_APP_ID }}',
+              messagingSenderId: '${{ secrets.FIREBASE_SENDER_ID }}',
+              projectId: '${{ secrets.FIREBASE_PROJECT_ID }}',
+            );
+          }
+          EOF
+
+      - name: Rodar testes
+        run: flutter test
