@@ -5,6 +5,7 @@ import 'package:sggm/controllers/musicas_controller.dart';
 import 'package:sggm/models/artista.dart';
 import 'package:sggm/models/musicas.dart';
 import 'package:sggm/views/widgets/artista_selector_widget.dart';
+import 'package:sggm/views/widgets/dialogs/confirm_delete_dialog.dart';
 import 'package:sggm/views/widgets/loading/shimmer_list_tile.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -209,50 +210,36 @@ class _MusicasPageState extends State<MusicasPage> {
     }
   }
 
-  void _confirmarExclusao(Musica musica) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Confirmar Exclusão'),
-        content: Text('Deseja realmente excluir "${musica.titulo}" de ${musica.artistaNome}?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.of(ctx).pop();
-              try {
-                await Provider.of<MusicasProvider>(context, listen: false).deletarMusica(musica.id!);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Música excluída com sucesso!'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Erro ao excluir música'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Excluir'),
-          ),
-        ],
-      ),
+  void _confirmarExclusao(Musica musica) async {
+    final confirmed = await ConfirmDeleteDialog.show(
+      context,
+      entityName: musica.titulo,
+      message:
+          'Deseja realmente excluir "${musica.titulo}" de ${musica.artistaNome}?\nEsta ação não pode ser desfeita.',
     );
+
+    if (confirmed && context.mounted) {
+      try {
+        await Provider.of<MusicasProvider>(context, listen: false).deletarMusica(musica.id!);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Música excluída com sucesso!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Erro ao excluir música'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
   }
 
   @override
