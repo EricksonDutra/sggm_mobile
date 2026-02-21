@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'package:sggm/controllers/auth_controller.dart';
 import 'package:sggm/controllers/escalas_controller.dart';
@@ -11,34 +12,29 @@ import 'package:sggm/controllers/musicos_controller.dart';
 import 'package:sggm/services/notification_service.dart';
 import 'package:sggm/services/secure_token_service.dart';
 import 'package:sggm/services/token_migration_service.dart';
+import 'package:sggm/util/app_logger.dart';
 import 'package:sggm/views/login_page.dart';
 import 'package:sggm/home_page.dart';
-import 'firebase_options.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:sggm/theme/app_theme.dart';
 import 'package:sggm/views/debug/biometric_test_page.dart';
+import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 🔐 Executar migração se necessário
   final secureTokenService = SecureTokenService();
-  final migrationService = TokenMigrationService(secureTokenService);
-  await migrationService.migrateIfNeeded();
+  await TokenMigrationService(secureTokenService).migrateIfNeeded();
 
   try {
-    // Inicializar Firebase
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    print('✅ Firebase inicializado com sucesso');
+    AppLogger.info('Firebase inicializado com sucesso');
 
-    // Inicializar serviço de notificações
     await NotificationService().initialize();
-    print('✅ Serviço de notificações inicializado');
+    AppLogger.info('Serviço de notificações inicializado');
   } catch (e, stackTrace) {
-    print('❌ Erro ao inicializar Firebase/Notificações: $e');
-    print('StackTrace: $stackTrace');
+    AppLogger.error('Erro ao inicializar Firebase/Notificações', e, stackTrace);
   }
 
   runApp(const MyApp());
@@ -51,27 +47,19 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        // 🔐 Provider de serviço seguro de token
         Provider<SecureTokenService>(
           create: (_) => SecureTokenService(),
         ),
-
-        // 🔐 Provider de autenticação
         ChangeNotifierProvider(
           create: (context) {
-            final secureTokenService = context.read<SecureTokenService>();
             final authProvider = AuthProvider(
-              secureTokenService: secureTokenService,
+              secureTokenService: context.read<SecureTokenService>(),
             );
 
-            // ✅ Carregar autenticação salva de forma assíncrona
             authProvider.loadSavedAuth();
 
-            // ✅ Configurar listener APENAS para refresh
-            // (não tenta enviar na inicialização)
             NotificationService().onTokenRefresh((newToken) {
-              print('🔄 Token FCM foi atualizado pelo Firebase');
-              // Só reenvia se já estiver autenticado
+              AppLogger.debug('Token FCM atualizado pelo Firebase');
               if (authProvider.isAuthenticated) {
                 authProvider.reenviarFCMToken();
               }
@@ -80,8 +68,6 @@ class MyApp extends StatelessWidget {
             return authProvider;
           },
         ),
-
-        // Providers dos demais controllers
         ChangeNotifierProvider(create: (_) => EventoProvider()),
         ChangeNotifierProvider(create: (_) => EscalasProvider()),
         ChangeNotifierProvider(create: (_) => MusicosProvider()),
@@ -99,19 +85,17 @@ class MyApp extends StatelessWidget {
               GlobalCupertinoLocalizations.delegate,
             ],
             supportedLocales: const [
-              Locale('pt', 'BR'), // Português do Brasil
-              Locale('en', 'US'), // Inglês (fallback)
+              Locale('pt', 'BR'),
+              Locale('en', 'US'),
             ],
             locale: const Locale('pt', 'BR'),
             theme: AppTheme.darkTheme,
-            // ✅ Navegação corrigida com base na autenticação
+            initialRoute: authProvider.isAuthenticated ? '/home' : '/',
             routes: {
               '/': (context) => const LoginPage(),
               '/home': (context) => const HomePage(),
-              '/biometric_test': (context) => const BiometricTestPage(), // ✅ Adicione
+              '/biometric_test': (context) => const BiometricTestPage(),
             },
-            // ✅ Usar initialRoute baseado na autenticação
-            initialRoute: authProvider.isAuthenticated ? '/home' : '/',
           );
         },
       ),
