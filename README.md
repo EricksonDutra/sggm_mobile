@@ -228,6 +228,23 @@ flutter build ios --release
 ```
 
 ------------------------------------------------------------------------
+## Configuração de Ambiente
+
+Este projeto usa `--dart-define` para variáveis de ambiente em compile-time.
+Os valores **nunca ficam expostos** no bundle do aplicativo.
+
+### Desenvolvimento
+```bash
+flutter run \
+  --dart-define=BASE_URL=http://SEU_IP:8000 \
+  --dart-define=TIMEOUT_SECONDS=15
+
+### Produção
+flutter build apk \
+  --dart-define=BASE_URL=https://api.ericksondutra.cloud \
+  --dart-define=TIMEOUT_SECONDS=10
+
+------------------------------------------------------------------------
 
 ## 📱 Funcionalidades por Tela
 
