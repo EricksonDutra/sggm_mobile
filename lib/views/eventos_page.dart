@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:sggm/controllers/auth_controller.dart';
 import 'package:sggm/controllers/eventos_controller.dart';
 import 'package:sggm/models/eventos.dart';
+import 'package:sggm/views/widgets/loading/shimmer_card.dart';
 import 'evento_detalhes_page.dart';
 
 class EventosPage extends StatefulWidget {
@@ -13,19 +14,15 @@ class EventosPage extends StatefulWidget {
 }
 
 class _EventosPageState extends State<EventosPage> {
-  bool _isLoading = true;
-
   @override
   void initState() {
     super.initState();
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _carregarEventos();
     });
   }
 
   Future<void> _carregarEventos() async {
-    setState(() => _isLoading = true);
     try {
       await Provider.of<EventoProvider>(context, listen: false).listarEventos();
     } catch (e) {
@@ -36,10 +33,6 @@ class _EventosPageState extends State<EventosPage> {
             backgroundColor: Colors.red,
           ),
         );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
       }
     }
   }
@@ -60,18 +53,20 @@ class _EventosPageState extends State<EventosPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
-                    controller: nomeController,
-                    decoration: const InputDecoration(
-                      labelText: 'Nome',
-                      border: OutlineInputBorder(),
-                    )),
+                  controller: nomeController,
+                  decoration: const InputDecoration(
+                    labelText: 'Nome',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
                 const SizedBox(height: 12),
                 TextField(
-                    controller: localController,
-                    decoration: const InputDecoration(
-                      labelText: 'Local',
-                      border: OutlineInputBorder(),
-                    )),
+                  controller: localController,
+                  decoration: const InputDecoration(
+                    labelText: 'Local',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
                 const SizedBox(height: 12),
                 InkWell(
                   onTap: () async {
@@ -85,11 +80,8 @@ class _EventosPageState extends State<EventosPage> {
                       cancelText: 'Cancelar',
                       confirmText: 'Confirmar',
                     );
-
                     if (picked != null && picked != dataSelecionada) {
-                      setState(() {
-                        dataSelecionada = picked;
-                      });
+                      setState(() => dataSelecionada = picked);
                     }
                   },
                   child: InputDecorator(
@@ -114,11 +106,8 @@ class _EventosPageState extends State<EventosPage> {
                       cancelText: 'Cancelar',
                       confirmText: 'Confirmar',
                     );
-
                     if (picked != null) {
-                      setState(() {
-                        horarioSelecionado = picked;
-                      });
+                      setState(() => horarioSelecionado = picked);
                     }
                   },
                   child: InputDecorator(
@@ -136,9 +125,12 @@ class _EventosPageState extends State<EventosPage> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancelar')),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancelar'),
+            ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 if (nomeController.text.isEmpty || localController.text.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
@@ -149,7 +141,6 @@ class _EventosPageState extends State<EventosPage> {
                   return;
                 }
 
-                // Ao salvar, combine data e horário:
                 final dataComHorario = DateTime(
                   dataSelecionada.year,
                   dataSelecionada.month,
@@ -157,30 +148,32 @@ class _EventosPageState extends State<EventosPage> {
                   horarioSelecionado.hour,
                   horarioSelecionado.minute,
                 );
-                final String dataISO = dataComHorario.toIso8601String();
 
-                // Converte para ISO 8601 para enviar ao backend
                 final novoEvento = Evento(
                   nome: nomeController.text,
                   local: localController.text,
-                  dataEvento: dataISO,
+                  dataEvento: dataComHorario.toIso8601String(),
                   descricao: 'Criado via App',
                 );
 
-                // Chama o provider para salvar no Django
-                Provider.of<EventoProvider>(context, listen: false).adicionarEvento(novoEvento).then((_) {
-                  Navigator.of(ctx).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Evento criado com sucesso!'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                }).catchError((e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Erro: $e')),
-                  );
-                });
+                try {
+                  await Provider.of<EventoProvider>(context, listen: false).adicionarEvento(novoEvento);
+                  if (ctx.mounted) {
+                    Navigator.of(ctx).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Evento criado com sucesso!'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (ctx.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Erro ao criar evento')),
+                    );
+                  }
+                }
               },
               child: const Text('Salvar'),
             ),
@@ -201,7 +194,7 @@ class _EventosPageState extends State<EventosPage> {
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _carregarEventos,
-          )
+          ),
         ],
       ),
       floatingActionButton: isLider
@@ -210,69 +203,71 @@ class _EventosPageState extends State<EventosPage> {
               child: const Icon(Icons.add),
             )
           : null,
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Consumer<EventoProvider>(
-              builder: (context, provider, child) {
-                if (provider.eventos.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      'Nenhum evento encontrado.\nVerifique a conexão com o Django.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  );
-                }
+      body: Consumer<EventoProvider>(
+        builder: (context, provider, child) {
+          if (provider.isLoading) {
+            return ListView.builder(
+              padding: const EdgeInsets.all(8.0),
+              itemCount: 5,
+              itemBuilder: (_, __) => const ShimmerCard(),
+            );
+          }
 
-                return RefreshIndicator(
-                  onRefresh: _carregarEventos,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(8.0),
-                    itemCount: provider.eventos.length,
-                    itemBuilder: (context, index) {
-                      final evento = provider.eventos[index];
-                      return Card(
-                        elevation: 3,
-                        margin: const EdgeInsets.symmetric(vertical: 6),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: Theme.of(context).primaryColor,
-                            child: const Icon(Icons.event, color: Colors.white),
-                          ),
-                          title: Text(
-                            evento.nome,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
-                                  const SizedBox(width: 4),
-                                  // Exibindo apenas o início da string de data para simplificar
-                                  Text(evento.dataEvento.split('T')[0]),
-                                ],
-                              ),
-                              Row(
-                                children: [
-                                  const Icon(Icons.location_on, size: 14, color: Colors.grey),
-                                  const SizedBox(width: 4),
-                                  Text(evento.local),
-                                ],
-                              ),
-                            ],
-                          ),
-                          trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => EventoDetalhesPage(evento: evento),
-                              ),
-                            );
-                          },
+          if (provider.eventos.isEmpty) {
+            return const Center(
+              child: Text(
+                'Nenhum evento encontrado.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey),
+              ),
+            );
+          }
+
+          return RefreshIndicator(
+            onRefresh: _carregarEventos,
+            child: ListView.builder(
+              padding: const EdgeInsets.all(8.0),
+              itemCount: provider.eventos.length,
+              itemBuilder: (context, index) {
+                final evento = provider.eventos[index];
+                return Card(
+                  elevation: 3,
+                  margin: const EdgeInsets.symmetric(vertical: 6),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: Theme.of(context).primaryColor,
+                      child: const Icon(Icons.event, color: Colors.white),
+                    ),
+                    title: Text(
+                      evento.nome,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
+                            const SizedBox(width: 4),
+                            Text(evento.dataEvento.split('T')[0]),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            const Icon(Icons.location_on, size: 14, color: Colors.grey),
+                            const SizedBox(width: 4),
+                            Text(evento.local),
+                          ],
+                        ),
+                      ],
+                    ),
+                    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => EventoDetalhesPage(evento: evento),
                         ),
                       );
                     },
@@ -280,6 +275,9 @@ class _EventosPageState extends State<EventosPage> {
                 );
               },
             ),
+          );
+        },
+      ),
     );
   }
 }

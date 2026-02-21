@@ -5,6 +5,8 @@ import 'package:sggm/controllers/instrumentos_controller.dart';
 import 'package:sggm/controllers/musicos_controller.dart';
 import 'package:sggm/models/musicos.dart';
 import 'package:sggm/views/perfil_edit_page.dart';
+import 'package:sggm/views/widgets/loading/loading_overlay.dart';
+import 'package:sggm/views/widgets/loading/shimmer_list_tile.dart';
 
 class MusicosPage extends StatefulWidget {
   const MusicosPage({super.key});
@@ -14,23 +16,19 @@ class MusicosPage extends StatefulWidget {
 }
 
 class _MusicosPageState extends State<MusicosPage> {
-  bool _isLoading = true;
   int? _musicoLogadoId;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // ✅ Carregar ID do músico logado
       final auth = Provider.of<AuthProvider>(context, listen: false);
       _musicoLogadoId = auth.userData?['musico_id'];
-
       await _carregarMusicos();
     });
   }
 
   Future<void> _carregarMusicos() async {
-    setState(() => _isLoading = true);
     try {
       await Provider.of<MusicosProvider>(context, listen: false).listarMusicos();
     } catch (e) {
@@ -42,38 +40,24 @@ class _MusicosPageState extends State<MusicosPage> {
           ),
         );
       }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
     }
   }
 
   void _mostrarDialogoAdicionar(BuildContext context) async {
-    // ✅ Carrega instrumentos ANTES de mostrar o diálogo
     final instrumentosProvider = Provider.of<InstrumentosProvider>(context, listen: false);
 
     if (instrumentosProvider.instrumentos.isEmpty) {
-      // Mostra loading
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => const Center(child: CircularProgressIndicator()),
-      );
-
+      LoadingOverlay.show(context, message: 'Carregando instrumentos...');
       await instrumentosProvider.listarInstrumentos();
-
-      if (context.mounted) {
-        Navigator.pop(context); // Fecha loading
-      }
+      if (context.mounted) LoadingOverlay.hide(context);
     }
 
-    // Agora mostra o diálogo com os dados já carregados
+    if (!context.mounted) return;
+
     final nomeController = TextEditingController();
     final telefoneController = TextEditingController();
     final emailController = TextEditingController();
     final enderecoController = TextEditingController();
-
     int? instrumentoSelecionadoId;
 
     showDialog(
@@ -105,8 +89,6 @@ class _MusicosPageState extends State<MusicosPage> {
                     decoration: const InputDecoration(labelText: 'Endereço'),
                   ),
                   const SizedBox(height: 16),
-
-                  // ✅ Dropdown de instrumentos com opção "Outro"
                   Consumer<InstrumentosProvider>(
                     builder: (context, provider, child) {
                       if (provider.instrumentos.isEmpty) {
@@ -116,58 +98,45 @@ class _MusicosPageState extends State<MusicosPage> {
                         );
                       }
 
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          DropdownButtonFormField<int>(
-                            decoration: const InputDecoration(
-                              labelText: 'Instrumento Principal',
-                              border: OutlineInputBorder(),
-                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      return DropdownButtonFormField<int>(
+                        decoration: const InputDecoration(
+                          labelText: 'Instrumento Principal',
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        ),
+                        isExpanded: true,
+                        initialValue: instrumentoSelecionadoId,
+                        items: [
+                          ...provider.instrumentos.map((instrumento) {
+                            return DropdownMenuItem<int>(
+                              value: instrumento.id,
+                              child: Text(instrumento.nome),
+                            );
+                          }),
+                          const DropdownMenuItem<int>(
+                            value: -1,
+                            child: Row(
+                              children: [
+                                Icon(Icons.add_circle_outline, size: 18),
+                                SizedBox(width: 8),
+                                Text('Cadastrar Novo Instrumento'),
+                              ],
                             ),
-                            isExpanded: true,
-                            initialValue: instrumentoSelecionadoId,
-                            items: [
-                              ...provider.instrumentos.map((instrumento) {
-                                return DropdownMenuItem<int>(
-                                  value: instrumento.id,
-                                  child: Text(instrumento.nome),
-                                );
-                              }),
-                              // ✅ NOVO: Opção "Outro"
-                              const DropdownMenuItem<int>(
-                                value: -1, // Valor especial para indicar "outro"
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.add_circle_outline, size: 18),
-                                    SizedBox(width: 8),
-                                    Text('➕ Cadastrar Novo Instrumento'),
-                                  ],
-                                ),
-                              ),
-                            ],
-                            onChanged: (novoValor) async {
-                              if (novoValor == -1) {
-                                // ✅ Mostrar diálogo para cadastrar novo instrumento
-                                final novoInstrumento = await _mostrarDialogoCadastrarInstrumento(context);
-
-                                if (novoInstrumento != null) {
-                                  // Recarregar lista de instrumentos
-                                  await provider.listarInstrumentos();
-
-                                  // Selecionar o novo instrumento
-                                  setStateDialog(() {
-                                    instrumentoSelecionadoId = novoInstrumento.id;
-                                  });
-                                }
-                              } else {
-                                setStateDialog(() {
-                                  instrumentoSelecionadoId = novoValor;
-                                });
-                              }
-                            },
                           ),
                         ],
+                        onChanged: (novoValor) async {
+                          if (novoValor == -1) {
+                            final novoInstrumento = await _mostrarDialogoCadastrarInstrumento(context);
+                            if (novoInstrumento != null) {
+                              await provider.listarInstrumentos();
+                              setStateDialog(() {
+                                instrumentoSelecionadoId = novoInstrumento.id;
+                              });
+                            }
+                          } else {
+                            setStateDialog(() => instrumentoSelecionadoId = novoValor);
+                          }
+                        },
                       );
                     },
                   ),
@@ -180,15 +149,14 @@ class _MusicosPageState extends State<MusicosPage> {
                 child: const Text('Cancelar'),
               ),
               ElevatedButton(
-                onPressed: () {
-                  // Validação simples
+                onPressed: () async {
                   if (nomeController.text.isEmpty || emailController.text.isEmpty || telefoneController.text.isEmpty) {
-                    ScaffoldMessenger.of(context)
-                        .showSnackBar(const SnackBar(content: Text('Preencha nome, telefone e email!')));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Preencha nome, telefone e email!')),
+                    );
                     return;
                   }
 
-                  // Cria o objeto Musico
                   final novoMusico = Musico(
                     nome: nomeController.text,
                     telefone: telefoneController.text,
@@ -198,35 +166,30 @@ class _MusicosPageState extends State<MusicosPage> {
                     status: 'ATIVO',
                   );
 
-                  // ✅ Converte para Map e envia
-                  Provider.of<MusicosProvider>(context, listen: false)
-                      .adicionarMusico(novoMusico.toJson())
-                      .then((sucesso) {
-                    if (sucesso) {
+                  try {
+                    final sucesso =
+                        await Provider.of<MusicosProvider>(context, listen: false).adicionarMusico(novoMusico.toJson());
+                    if (ctx.mounted) {
                       Navigator.of(ctx).pop();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Músico cadastrado com sucesso!'),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
-                    } else {
                       final erro = Provider.of<MusicosProvider>(context, listen: false).errorMessage;
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text(erro ?? 'Erro ao cadastrar músico'),
+                          content:
+                              Text(sucesso ? 'Músico cadastrado com sucesso!' : erro ?? 'Erro ao cadastrar músico'),
+                          backgroundColor: sucesso ? Colors.green : Colors.red,
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (ctx.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Erro ao cadastrar músico'),
                           backgroundColor: Colors.red,
                         ),
                       );
                     }
-                  }).catchError((e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Erro: $e'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  });
+                  }
                 },
                 child: const Text('Salvar'),
               ),
@@ -237,7 +200,6 @@ class _MusicosPageState extends State<MusicosPage> {
     );
   }
 
-// ✅ NOVO: Diálogo para cadastrar novo instrumento
   Future<dynamic> _mostrarDialogoCadastrarInstrumento(BuildContext context) async {
     final nomeInstrumentoController = TextEditingController();
 
@@ -280,38 +242,33 @@ class _MusicosPageState extends State<MusicosPage> {
                 return;
               }
 
-              // Cadastrar instrumento
               final instrumentosProvider = Provider.of<InstrumentosProvider>(context, listen: false);
 
               try {
                 final novoInstrumento = await instrumentosProvider.adicionarInstrumento({'nome': nome});
 
-                if (novoInstrumento != null) {
-                  if (ctx.mounted) Navigator.of(ctx).pop(novoInstrumento);
+                if (ctx.mounted) Navigator.of(ctx).pop(novoInstrumento);
 
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Instrumento "$nome" cadastrado com sucesso!'),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
-                  }
-                } else {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Erro ao cadastrar instrumento'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
+                if (context.mounted && novoInstrumento != null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Instrumento "$nome" cadastrado com sucesso!'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                } else if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Erro ao cadastrar instrumento'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
                 }
               } catch (e) {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Erro: $e'),
+                    const SnackBar(
+                      content: Text('Erro ao cadastrar instrumento'),
                       backgroundColor: Colors.red,
                     ),
                   );
@@ -330,7 +287,6 @@ class _MusicosPageState extends State<MusicosPage> {
     final isOwnProfile = musico.id == _musicoLogadoId;
     final isLider = auth.isLider;
 
-    // Verificar permissão: pode editar se for próprio perfil OU se for líder
     if (!isOwnProfile && !isLider) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -341,7 +297,6 @@ class _MusicosPageState extends State<MusicosPage> {
       return;
     }
 
-    // Navegar para tela de edição
     final resultado = await Navigator.push(
       context,
       MaterialPageRoute(
@@ -352,13 +307,11 @@ class _MusicosPageState extends State<MusicosPage> {
       ),
     );
 
-    // Se retornou true, recarregar lista
     if (resultado == true) {
       _carregarMusicos();
     }
   }
 
-  // ✅ NOVO: Confirmar exclusão
   void _confirmarExclusao(Musico musico) {
     showDialog(
       context: context,
@@ -371,17 +324,20 @@ class _MusicosPageState extends State<MusicosPage> {
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(ctx);
-              Provider.of<MusicosProvider>(context, listen: false).deletarMusico(musico.id!).then((sucesso) {
-                if (sucesso) {
+              try {
+                final sucesso = await Provider.of<MusicosProvider>(context, listen: false).deletarMusico(musico.id!);
+                if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Músico excluído com sucesso'),
-                      backgroundColor: Colors.green,
+                    SnackBar(
+                      content: Text(sucesso ? 'Músico excluído com sucesso' : 'Erro ao excluir músico'),
+                      backgroundColor: sucesso ? Colors.green : Colors.red,
                     ),
                   );
-                } else {
+                }
+              } catch (e) {
+                if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('Erro ao excluir músico'),
@@ -389,7 +345,7 @@ class _MusicosPageState extends State<MusicosPage> {
                     ),
                   );
                 }
-              });
+              }
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('Excluir'),
@@ -409,159 +365,157 @@ class _MusicosPageState extends State<MusicosPage> {
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _carregarMusicos,
-          )
+          ),
         ],
       ),
       floatingActionButton: Consumer<AuthProvider>(
         builder: (context, auth, child) {
-          // ✅ Apenas líderes podem adicionar músicos
           if (!auth.isLider) return const SizedBox.shrink();
-
           return FloatingActionButton(
             onPressed: () => _mostrarDialogoAdicionar(context),
             child: const Icon(Icons.person_add),
           );
         },
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Consumer<MusicosProvider>(
-              builder: (context, provider, child) {
-                if (provider.musicos.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      'Nenhum músico encontrado.\\nCadastre o primeiro!',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  );
-                }
+      body: Consumer<MusicosProvider>(
+        builder: (context, provider, child) {
+          if (provider.isLoading) {
+            return ListView.builder(
+              padding: const EdgeInsets.all(8.0),
+              itemCount: 6,
+              itemBuilder: (_, __) => const ShimmerListTile(showAvatar: true, showTrailing: true),
+            );
+          }
 
-                return RefreshIndicator(
-                  onRefresh: _carregarMusicos,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(8.0),
-                    itemCount: provider.musicos.length,
-                    itemBuilder: (context, index) {
-                      final musico = provider.musicos[index];
-                      final isOwnProfile = musico.id == _musicoLogadoId;
+          if (provider.musicos.isEmpty) {
+            return const Center(
+              child: Text(
+                'Nenhum músico encontrado.\nCadastre o primeiro!',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey),
+              ),
+            );
+          }
 
-                      return Card(
-                        elevation: 3,
-                        margin: const EdgeInsets.symmetric(vertical: 6),
-                        child: ListTile(
-                          leading: Stack(
-                            children: [
-                              CircleAvatar(
-                                backgroundColor: musico.status == 'ATIVO'
-                                    ? Colors.deepPurple
-                                    : musico.status == 'AFASTADO'
-                                        ? Colors.orange
-                                        : Colors.grey,
-                                child: Text(
-                                  musico.nome.isNotEmpty ? musico.nome[0].toUpperCase() : '?',
-                                  style: const TextStyle(color: Colors.white),
-                                ),
-                              ),
-                              if (musico.status != 'ATIVO')
-                                Positioned(
-                                  right: 0,
-                                  bottom: 0,
-                                  child: Container(
-                                    width: 12,
-                                    height: 12,
-                                    decoration: BoxDecoration(
-                                      color: musico.status == 'INATIVO' ? Colors.red : Colors.orange,
-                                      shape: BoxShape.circle,
-                                      border: Border.all(color: Colors.white, width: 1.5),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                          title: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  musico.nome,
-                                  style: const TextStyle(fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                              // ✅ Badge "Você" se for o próprio perfil
-                              if (isOwnProfile)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: Colors.deepPurple,
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: const Text(
-                                    'Você',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (musico.instrumentoPrincipalNome != null &&
-                                  musico.instrumentoPrincipalNome!.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 4.0),
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.music_note, size: 14, color: Colors.grey),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        musico.instrumentoPrincipalNome!,
-                                        style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.w500),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  const Icon(Icons.email, size: 14, color: Colors.grey),
-                                  const SizedBox(width: 4),
-                                  Expanded(child: Text(musico.email, overflow: TextOverflow.ellipsis)),
-                                ],
-                              ),
-                              Row(
-                                children: [
-                                  const Icon(Icons.phone, size: 14, color: Colors.grey),
-                                  const SizedBox(width: 4),
-                                  Text(musico.telefone),
-                                ],
-                              ),
-                            ],
-                          ),
-                          trailing: Consumer<AuthProvider>(
-                            builder: (context, auth, child) {
-                              final isLider = auth.isLider;
+          return RefreshIndicator(
+            onRefresh: _carregarMusicos,
+            child: ListView.builder(
+              padding: const EdgeInsets.all(8.0),
+              itemCount: provider.musicos.length,
+              itemBuilder: (context, index) {
+                final musico = provider.musicos[index];
+                final isOwnProfile = musico.id == _musicoLogadoId;
 
-                              // ✅ Apenas líder pode excluir
-                              if (!isLider) return const SizedBox.shrink();
-
-                              return IconButton(
-                                icon: const Icon(Icons.delete, color: Colors.redAccent),
-                                onPressed: () => _confirmarExclusao(musico),
-                              );
-                            },
+                return Card(
+                  elevation: 3,
+                  margin: const EdgeInsets.symmetric(vertical: 6),
+                  child: ListTile(
+                    leading: Stack(
+                      children: [
+                        CircleAvatar(
+                          backgroundColor: musico.status == 'ATIVO'
+                              ? Colors.deepPurple
+                              : musico.status == 'AFASTADO'
+                                  ? Colors.orange
+                                  : Colors.grey,
+                          child: Text(
+                            musico.nome.isNotEmpty ? musico.nome[0].toUpperCase() : '?',
+                            style: const TextStyle(color: Colors.white),
                           ),
-                          onTap: () => _editarMusico(musico), // ✅ NOVO: Editar ao tocar
                         ),
-                      );
-                    },
+                        if (musico.status != 'ATIVO')
+                          Positioned(
+                            right: 0,
+                            bottom: 0,
+                            child: Container(
+                              width: 12,
+                              height: 12,
+                              decoration: BoxDecoration(
+                                color: musico.status == 'INATIVO' ? Colors.red : Colors.orange,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 1.5),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    title: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            musico.nome,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        if (isOwnProfile)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.deepPurple,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Text(
+                              'Você',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (musico.instrumentoPrincipalNome != null && musico.instrumentoPrincipalNome!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4.0),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.music_note, size: 14, color: Colors.grey),
+                                const SizedBox(width: 4),
+                                Text(
+                                  musico.instrumentoPrincipalNome!,
+                                  style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.w500),
+                                ),
+                              ],
+                            ),
+                          ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            const Icon(Icons.email, size: 14, color: Colors.grey),
+                            const SizedBox(width: 4),
+                            Expanded(child: Text(musico.email, overflow: TextOverflow.ellipsis)),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            const Icon(Icons.phone, size: 14, color: Colors.grey),
+                            const SizedBox(width: 4),
+                            Text(musico.telefone),
+                          ],
+                        ),
+                      ],
+                    ),
+                    trailing: Consumer<AuthProvider>(
+                      builder: (context, auth, child) {
+                        if (!auth.isLider) return const SizedBox.shrink();
+                        return IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.redAccent),
+                          onPressed: () => _confirmarExclusao(musico),
+                        );
+                      },
+                    ),
+                    onTap: () => _editarMusico(musico),
                   ),
                 );
               },
             ),
+          );
+        },
+      ),
     );
   }
 }
