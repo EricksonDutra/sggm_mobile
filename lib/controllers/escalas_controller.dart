@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:sggm/models/escalas.dart';
 import 'package:sggm/services/api_service.dart';
+import 'package:sggm/util/app_logger.dart';
 import 'package:sggm/util/constants.dart';
 
 class EscalasProvider extends ChangeNotifier {
@@ -15,65 +16,34 @@ class EscalasProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
-  /// Listar todas as escalas
   Future<void> listarEscalas() async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      print('📥 Listando escalas...');
-
       final response = await ApiService.get(apiUrl);
 
-      print('📡 Status: ${response.statusCode!}');
+      AppLogger.debug('listarEscalas status: ${response.statusCode}');
 
       if (response.statusCode! == 200) {
-        final decodedData = response.data;
-
-        print('📡 Data type: ${decodedData.runtimeType}');
-
-        // ✅ Detectar paginação do DRF
-        List<dynamic> resultsList;
-
-        if (decodedData is Map && decodedData.containsKey('results')) {
-          resultsList = decodedData['results'] as List<dynamic>;
-          print('✅ Formato paginado detectado');
-          print('   Total: ${decodedData['count']} escalas');
-        } else if (decodedData is List) {
-          resultsList = decodedData;
-          print('✅ Formato lista detectado');
-        } else {
-          throw Exception('Formato inesperado: ${decodedData.runtimeType}');
-        }
-
-        _escalas = resultsList.map((item) => Escala.fromJson(item as Map<String, dynamic>)).toList();
-
-        print('✅ ${_escalas.length} escalas carregadas');
-
-        for (var escala in _escalas) {
-          print('   📋 Escala ID ${escala.id}');
-        }
-
+        _escalas = _parseEscalasList(response.data);
+        AppLogger.info('${_escalas.length} escalas carregadas');
         notifyListeners();
       } else if (response.statusCode! == 401) {
         _errorMessage = 'Não autorizado. Faça login novamente.';
-        print('❌ $_errorMessage');
         throw Exception(_errorMessage);
       } else {
-        _errorMessage = 'Erro ${response.statusCode!}: ${response.data}';
-        print('❌ $_errorMessage');
+        _errorMessage = 'Erro ${response.statusCode}';
         throw Exception(_errorMessage);
       }
     } on DioException catch (e) {
       _errorMessage = 'Erro ao listar escalas: ${e.message}';
-      print('❌ $_errorMessage');
-      print('📝 Response: ${e.response?.data}');
+      AppLogger.error('Erro ao listar escalas', e);
       rethrow;
     } catch (e, stackTrace) {
       _errorMessage = 'Erro ao listar escalas: $e';
-      print('❌ $_errorMessage');
-      print('📍 Stack trace: $stackTrace');
+      AppLogger.error('Erro ao listar escalas', e, stackTrace);
       rethrow;
     } finally {
       _isLoading = false;
@@ -81,45 +51,35 @@ class EscalasProvider extends ChangeNotifier {
     }
   }
 
-  /// Adicionar nova escala
   Future<void> adicionarEscala(Escala escala) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      print('📤 Adicionando escala...');
-      print('   Dados: ${escala.toJson()}');
+      final response = await ApiService.post(apiUrl, body: escala.toJson());
 
-      final response = await ApiService.post(
-        apiUrl,
-        body: escala.toJson(),
-      );
-
-      print('📡 Status: ${response.statusCode!}');
-      print('📡 Response: ${response.data}');
+      AppLogger.debug('adicionarEscala status: ${response.statusCode}');
 
       if (response.statusCode! == 201 || response.statusCode! == 200) {
         final novaEscala = Escala.fromJson(response.data);
         _escalas.add(novaEscala);
-        print('✅ Escala adicionada: ID ${novaEscala.id}');
+        AppLogger.info('Escala adicionada: ID ${novaEscala.id}');
         notifyListeners();
       } else if (response.statusCode! == 401) {
         _errorMessage = 'Não autorizado. Faça login novamente.';
         throw Exception(_errorMessage);
       } else {
-        _errorMessage = 'Falha ao criar escala: ${response.data}';
+        _errorMessage = 'Falha ao criar escala';
         throw Exception(_errorMessage);
       }
     } on DioException catch (e) {
       _errorMessage = 'Erro ao adicionar escala: ${e.message}';
-      print('❌ $_errorMessage');
-      print('📝 Response: ${e.response?.data}');
+      AppLogger.error('Erro ao adicionar escala', e);
       rethrow;
     } catch (e, stackTrace) {
       _errorMessage = 'Erro ao adicionar escala: $e';
-      print('❌ $_errorMessage');
-      print('📍 $stackTrace');
+      AppLogger.error('Erro ao adicionar escala', e, stackTrace);
       rethrow;
     } finally {
       _isLoading = false;
@@ -127,46 +87,37 @@ class EscalasProvider extends ChangeNotifier {
     }
   }
 
-  /// Atualizar escala existente
   Future<void> atualizarEscala(int id, Escala escala) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      print('📤 Atualizando escala $id...');
+      final response = await ApiService.put('$apiUrl$id/', body: escala.toJson());
 
-      final response = await ApiService.put(
-        '$apiUrl$id/',
-        body: escala.toJson(),
-      );
-
-      print('📡 Status: ${response.statusCode!}');
+      AppLogger.debug('atualizarEscala status: ${response.statusCode}');
 
       if (response.statusCode! >= 200 && response.statusCode! <= 299) {
         final index = _escalas.indexWhere((e) => e.id == id);
         if (index != -1) {
-          final escalaAtualizada = Escala.fromJson(response.data);
-          _escalas[index] = escalaAtualizada;
-          print('✅ Escala atualizada: ID $id');
+          _escalas[index] = Escala.fromJson(response.data);
+          AppLogger.info('Escala atualizada: ID $id');
           notifyListeners();
         }
       } else if (response.statusCode! == 401) {
         _errorMessage = 'Não autorizado. Faça login novamente.';
         throw Exception(_errorMessage);
       } else {
-        _errorMessage = 'Falha ao atualizar escala: ${response.data}';
+        _errorMessage = 'Falha ao atualizar escala';
         throw Exception(_errorMessage);
       }
     } on DioException catch (e) {
       _errorMessage = 'Erro ao atualizar escala: ${e.message}';
-      print('❌ $_errorMessage');
-      print('📝 Response: ${e.response?.data}');
+      AppLogger.error('Erro ao atualizar escala ID $id', e);
       rethrow;
     } catch (e, stackTrace) {
       _errorMessage = 'Erro ao atualizar escala: $e';
-      print('❌ $_errorMessage');
-      print('📍 $stackTrace');
+      AppLogger.error('Erro ao atualizar escala ID $id', e, stackTrace);
       rethrow;
     } finally {
       _isLoading = false;
@@ -174,39 +125,34 @@ class EscalasProvider extends ChangeNotifier {
     }
   }
 
-  /// Deletar escala
   Future<void> deletarEscala(int id) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      print('🗑️ Deletando escala $id...');
-
       final response = await ApiService.delete('$apiUrl$id/');
 
-      print('📡 Status: ${response.statusCode!}');
+      AppLogger.debug('deletarEscala status: ${response.statusCode}');
 
       if (response.statusCode! >= 200 && response.statusCode! <= 299) {
         _escalas.removeWhere((escala) => escala.id == id);
-        print('✅ Escala deletada: ID $id');
+        AppLogger.info('Escala deletada: ID $id');
         notifyListeners();
       } else if (response.statusCode! == 401) {
         _errorMessage = 'Não autorizado. Faça login novamente.';
         throw Exception(_errorMessage);
       } else {
-        _errorMessage = 'Falha ao deletar escala: ${response.data}';
+        _errorMessage = 'Falha ao deletar escala';
         throw Exception(_errorMessage);
       }
     } on DioException catch (e) {
       _errorMessage = 'Erro ao deletar escala: ${e.message}';
-      print('❌ $_errorMessage');
-      print('📝 Response: ${e.response?.data}');
+      AppLogger.error('Erro ao deletar escala ID $id', e);
       rethrow;
     } catch (e, stackTrace) {
       _errorMessage = 'Erro ao deletar escala: $e';
-      print('❌ $_errorMessage');
-      print('📍 $stackTrace');
+      AppLogger.error('Erro ao deletar escala ID $id', e, stackTrace);
       rethrow;
     } finally {
       _isLoading = false;
@@ -214,80 +160,44 @@ class EscalasProvider extends ChangeNotifier {
     }
   }
 
-  /// Buscar escalas de um evento específico
   Future<List<Escala>> buscarEscalasPorEvento(int eventoId) async {
     try {
-      print('📥 Buscando escalas do evento $eventoId...');
-
       final response = await ApiService.get('$apiUrl?evento=$eventoId');
 
       if (response.statusCode! == 200) {
-        final decodedData = response.data;
-
-        List<dynamic> resultsList;
-
-        if (decodedData is Map && decodedData.containsKey('results')) {
-          resultsList = decodedData['results'] as List<dynamic>;
-        } else if (decodedData is List) {
-          resultsList = decodedData;
-        } else {
-          throw Exception('Formato inesperado');
-        }
-
-        final escalas = resultsList.map((item) => Escala.fromJson(item as Map<String, dynamic>)).toList();
-
-        print('✅ ${escalas.length} escalas encontradas');
+        final escalas = _parseEscalasList(response.data);
+        AppLogger.debug('${escalas.length} escalas encontradas para evento $eventoId');
         return escalas;
       } else if (response.statusCode! == 401) {
         throw Exception('Não autorizado. Faça login novamente.');
       }
       return [];
     } on DioException catch (e) {
-      print('❌ Erro ao buscar escalas do evento: ${e.message}');
-      print('📝 Response: ${e.response?.data}');
+      AppLogger.error('Erro ao buscar escalas do evento $eventoId', e);
       return [];
     } catch (e, stackTrace) {
-      print('❌ Erro ao buscar escalas do evento: $e');
-      print('📍 $stackTrace');
+      AppLogger.error('Erro ao buscar escalas do evento $eventoId', e, stackTrace);
       return [];
     }
   }
 
-  /// Buscar escalas de um músico específico
   Future<List<Escala>> buscarEscalasPorMusico(int musicoId) async {
     try {
-      print('📥 Buscando escalas do músico $musicoId...');
-
       final response = await ApiService.get('$apiUrl?musico=$musicoId');
 
       if (response.statusCode! == 200) {
-        final decodedData = response.data;
-
-        List<dynamic> resultsList;
-
-        if (decodedData is Map && decodedData.containsKey('results')) {
-          resultsList = decodedData['results'] as List<dynamic>;
-        } else if (decodedData is List) {
-          resultsList = decodedData;
-        } else {
-          throw Exception('Formato inesperado');
-        }
-
-        final escalas = resultsList.map((item) => Escala.fromJson(item as Map<String, dynamic>)).toList();
-
-        print('✅ ${escalas.length} escalas encontradas');
+        final escalas = _parseEscalasList(response.data);
+        AppLogger.debug('${escalas.length} escalas encontradas para músico $musicoId');
         return escalas;
       } else if (response.statusCode! == 401) {
         throw Exception('Não autorizado. Faça login novamente.');
       }
       return [];
     } on DioException catch (e) {
-      print('❌ Erro ao buscar escalas do músico: ${e.message}');
-      print('📝 Response: ${e.response?.data}');
+      AppLogger.error('Erro ao buscar escalas do músico $musicoId', e);
       return [];
     } catch (e, stackTrace) {
-      print('❌ Erro ao buscar escalas do músico: $e');
-      print('📍 $stackTrace');
+      AppLogger.error('Erro ao buscar escalas do músico $musicoId', e, stackTrace);
       return [];
     }
   }
@@ -298,49 +208,41 @@ class EscalasProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      print('📤 ${confirmado ? "Confirmando" : "Desconfirmando"} escala $escalaId...');
-
       final response = await ApiService.post(
         '$apiUrl$escalaId/confirmar/',
         body: {'confirmado': confirmado},
       );
 
-      print('📡 Status: ${response.statusCode}');
-      print('✅ Resposta: ${response.data}');
+      AppLogger.debug('confirmarPresenca status: ${response.statusCode}');
 
       if (response.statusCode! >= 200 && response.statusCode! <= 299) {
-        // Atualizar escala localmente
         final index = _escalas.indexWhere((e) => e.id == escalaId);
         if (index != -1) {
-          // Criar nova instância com confirmado atualizado
           final escalaAtual = _escalas[index];
           _escalas[index] = Escala(
-              id: escalaAtual.id,
-              musicoNome: escalaAtual.musicoNome,
-              musicoId: escalaAtual.musicoId,
-              eventoNome: escalaAtual.eventoNome,
-              instrumentoNoEvento: escalaAtual.instrumentoNoEvento,
-              confirmado: confirmado,
-              criadoEm: escalaAtual.criadoEm,
-              eventoId: escalaAtual.eventoId);
-
-          print('✅ Escala $escalaId ${confirmado ? "confirmada" : "desconfirmada"} localmente');
+            id: escalaAtual.id,
+            musicoNome: escalaAtual.musicoNome,
+            musicoId: escalaAtual.musicoId,
+            eventoNome: escalaAtual.eventoNome,
+            instrumentoNoEvento: escalaAtual.instrumentoNoEvento,
+            confirmado: confirmado,
+            criadoEm: escalaAtual.criadoEm,
+            eventoId: escalaAtual.eventoId,
+          );
+          AppLogger.info('Presença ${confirmado ? "confirmada" : "desconfirmada"} na escala $escalaId');
         }
-
         notifyListeners();
       } else {
-        _errorMessage = 'Erro ao confirmar presença: ${response.data}';
+        _errorMessage = 'Erro ao confirmar presença';
         throw Exception(_errorMessage);
       }
     } on DioException catch (e) {
       _errorMessage = 'Erro ao confirmar presença: ${e.message}';
-      print('❌ $_errorMessage');
-      print('📝 Response: ${e.response?.data}');
+      AppLogger.error('Erro ao confirmar presença na escala $escalaId', e);
       rethrow;
     } catch (e, stackTrace) {
       _errorMessage = 'Erro ao confirmar presença: $e';
-      print('❌ $_errorMessage');
-      print('📍 $stackTrace');
+      AppLogger.error('Erro ao confirmar presença na escala $escalaId', e, stackTrace);
       rethrow;
     } finally {
       _isLoading = false;
@@ -348,13 +250,26 @@ class EscalasProvider extends ChangeNotifier {
     }
   }
 
-  /// Limpar mensagem de erro
+  List<Escala> _parseEscalasList(dynamic data) {
+    final List<dynamic> resultsList;
+
+    if (data is Map && data.containsKey('results')) {
+      resultsList = data['results'] as List<dynamic>;
+      AppLogger.debug('Formato paginado — total: ${data['count']}');
+    } else if (data is List) {
+      resultsList = data;
+    } else {
+      throw Exception('Formato de resposta inesperado: ${data.runtimeType}');
+    }
+
+    return resultsList.map((item) => Escala.fromJson(item as Map<String, dynamic>)).toList();
+  }
+
   void limparErro() {
     _errorMessage = null;
     notifyListeners();
   }
 
-  /// Limpar lista (útil no logout)
   void limpar() {
     _escalas = [];
     _errorMessage = null;
