@@ -45,6 +45,17 @@ class _ArtistaSelectorWidgetState extends State<ArtistaSelectorWidget> {
       final artistas = await _artistaService.listarArtistas(busca: busca);
       if (mounted) {
         setState(() => _artistas = artistas);
+        if (_artistaSelecionado != null && _artistas.isNotEmpty) {
+          final match = _artistas
+              .where(
+                (a) => a.id == _artistaSelecionado!.id,
+              )
+              .toList();
+          if (match.isNotEmpty) {
+            _artistaSelecionado = match.first;
+            widget.onArtistaSelected(_artistaSelecionado!);
+          }
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -158,7 +169,7 @@ class _ArtistaSelectorWidgetState extends State<ArtistaSelectorWidget> {
           )
         else
           DropdownButtonFormField<Artista>(
-            initialValue: _artistaSelecionado,
+            value: _artistas.contains(_artistaSelecionado) ? _artistaSelecionado : null,
             decoration: InputDecoration(
               labelText: 'Selecione o Artista',
               border: OutlineInputBorder(
