@@ -192,7 +192,6 @@ class EscalasProvider extends ChangeNotifier {
             confirmado: confirmado,
             criadoEm: escalaAtual.criadoEm,
             eventoId: escalaAtual.eventoId,
-            dataHoraEnsaio: escalaAtual.dataHoraEnsaio,
           );
           AppLogger.info('Presença ${confirmado ? "confirmada" : "desconfirmada"} na escala $escalaId');
         }
