@@ -9,7 +9,6 @@ class Escala {
   final String? observacao;
   final bool confirmado;
   final DateTime? criadoEm;
-  final DateTime? dataHoraEnsaio;
 
   Escala({
     this.id,
@@ -22,7 +21,6 @@ class Escala {
     this.confirmado = false,
     this.criadoEm,
     this.instrumentoNome,
-    this.dataHoraEnsaio,
   });
 
   factory Escala.fromJson(Map<String, dynamic> json) {
@@ -37,7 +35,6 @@ class Escala {
       instrumentoNome: json['instrumento_nome'],
       confirmado: json['confirmado'] ?? false,
       criadoEm: json['criado_em'] != null ? DateTime.parse(json['criado_em']) : null,
-      dataHoraEnsaio: json['data_hora_ensaio'] != null ? DateTime.parse(json['data_hora_ensaio']) : null,
     );
   }
 
@@ -48,7 +45,6 @@ class Escala {
       'evento': eventoId,
       'instrumento_no_evento': instrumentoNoEvento != null ? instrumentoNoEvento.toString() : '',
       'observacao': observacao ?? '',
-      if (dataHoraEnsaio != null) 'data_hora_ensaio': dataHoraEnsaio!.toIso8601String(),
     };
   }
 }

@@ -3,7 +3,7 @@ import 'package:sggm/models/escalas.dart';
 
 void main() {
   group('Escala.fromJson', () {
-    test('deserializa data_hora_ensaio quando presente', () {
+    test('deserializa campos básicos corretamente', () {
       final json = {
         'id': 1,
         'musico': 10,
@@ -11,76 +11,74 @@ void main() {
         'musico_nome': 'Erickson',
         'evento_nome': 'Culto',
         'confirmado': false,
-        'data_hora_ensaio': '2026-03-10T18:00:00',
+        'observacao': 'Teste',
+        'instrumento_nome': 'Violão',
       };
 
       final escala = Escala.fromJson(json);
 
-      expect(escala.dataHoraEnsaio, isNotNull);
-      expect(escala.dataHoraEnsaio, equals(DateTime.parse('2026-03-10T18:00:00')));
+      expect(escala.id, equals(1));
+      expect(escala.musicoId, equals(10));
+      expect(escala.eventoId, equals(20));
+      expect(escala.musicoNome, equals('Erickson'));
+      expect(escala.eventoNome, equals('Culto'));
+      expect(escala.confirmado, isFalse);
+      expect(escala.observacao, equals('Teste'));
     });
 
-    test('data_hora_ensaio fica null quando ausente no JSON', () {
+    test('confirmado usa false como padrão quando ausente', () {
       final json = {
         'id': 1,
         'musico': 10,
         'evento': 20,
-        'musico_nome': 'Erickson',
-        'evento_nome': 'Culto',
+      };
+
+      final escala = Escala.fromJson(json);
+
+      expect(escala.confirmado, isFalse);
+    });
+
+    test('não contém dataHoraEnsaio', () {
+      final json = {
+        'id': 1,
+        'musico': 10,
+        'evento': 20,
         'confirmado': false,
       };
 
       final escala = Escala.fromJson(json);
 
-      expect(escala.dataHoraEnsaio, isNull);
-    });
-
-    test('data_hora_ensaio fica null quando valor é null no JSON', () {
-      final json = {
-        'id': 1,
-        'musico': 10,
-        'evento': 20,
-        'confirmado': false,
-        'data_hora_ensaio': null,
-      };
-
-      final escala = Escala.fromJson(json);
-
-      expect(escala.dataHoraEnsaio, isNull);
+      // dataHoraEnsaio foi movido para Evento
+      expect(escala.toJson().containsKey('data_hora_ensaio'), isFalse);
     });
   });
 
   group('Escala.toJson', () {
-    test('serializa data_hora_ensaio no formato ISO 8601 quando preenchido', () {
-      final dataEnsaio = DateTime(2026, 3, 10, 18, 0, 0);
+    test('serializa campos obrigatórios corretamente', () {
       final escala = Escala(
         musicoId: 10,
         eventoId: 20,
-        dataHoraEnsaio: dataEnsaio,
+        observacao: 'Obs',
       );
 
       final json = escala.toJson();
 
-      expect(json['data_hora_ensaio'], isNotNull);
-      expect(json['data_hora_ensaio'], equals(dataEnsaio.toIso8601String()));
+      expect(json['musico'], equals(10));
+      expect(json['evento'], equals(20));
+      expect(json['observacao'], equals('Obs'));
+      expect(json.containsKey('data_hora_ensaio'), isFalse);
     });
 
-    test('não inclui data_hora_ensaio no JSON quando null', () {
-      final escala = Escala(
-        musicoId: 10,
-        eventoId: 20,
-      );
-
-      final json = escala.toJson();
-
-      expect(json.containsKey('data_hora_ensaio'), isFalse);
+    test('não inclui id quando null', () {
+      final escala = Escala(musicoId: 1, eventoId: 2);
+      expect(escala.toJson().containsKey('id'), isFalse);
     });
   });
 
   group('Escala - estado inicial', () {
-    test('dataHoraEnsaio é null por padrão', () {
+    test('confirmado é false por padrão', () {
       final escala = Escala(musicoId: 1, eventoId: 2);
-      expect(escala.dataHoraEnsaio, isNull);
+      expect(escala.confirmado, isFalse);
     });
   });
 }

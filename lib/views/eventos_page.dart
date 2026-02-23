@@ -40,6 +40,7 @@ class _EventosPageState extends State<EventosPage> {
   void _mostrarDialogoAdicionar(BuildContext context) {
     final nomeController = TextEditingController(text: 'Culto');
     final localController = TextEditingController(text: 'IPB Ponta Porã');
+    DateTime? dataHoraEnsaio;
     DateTime dataSelecionada = DateTime.now();
     TimeOfDay horarioSelecionado = TimeOfDay.now();
 
@@ -121,6 +122,61 @@ class _EventosPageState extends State<EventosPage> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: () async {
+                    final data = await showDatePicker(
+                      context: context,
+                      initialDate: dataHoraEnsaio ?? dataSelecionada,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2030),
+                      helpText: 'Data do ensaio',
+                      cancelText: 'Cancelar',
+                      confirmText: 'Confirmar',
+                    );
+                    if (data == null) return;
+                    final hora = await showTimePicker(
+                      context: context,
+                      initialTime: dataHoraEnsaio != null ? TimeOfDay.fromDateTime(dataHoraEnsaio!) : TimeOfDay.now(),
+                    );
+                    if (hora == null) return;
+                    setState(() {
+                      dataHoraEnsaio = DateTime(
+                        data.year,
+                        data.month,
+                        data.day,
+                        hora.hour,
+                        hora.minute,
+                      );
+                    });
+                  },
+                  child: InputDecorator(
+                    decoration: InputDecoration(
+                      labelText: 'Data e hora do ensaio (opcional)',
+                      border: const OutlineInputBorder(),
+                      suffixIcon: const Icon(Icons.event_available),
+                      // botão para limpar
+                      suffix: dataHoraEnsaio != null
+                          ? GestureDetector(
+                              onTap: () => setState(() => dataHoraEnsaio = null),
+                              child: const Icon(Icons.close, size: 18),
+                            )
+                          : null,
+                    ),
+                    child: Text(
+                      dataHoraEnsaio != null
+                          ? '${dataHoraEnsaio!.day.toString().padLeft(2, '0')}/'
+                              '${dataHoraEnsaio!.month.toString().padLeft(2, '0')}/'
+                              '${dataHoraEnsaio!.year}  '
+                              '${dataHoraEnsaio!.hour.toString().padLeft(2, '0')}:'
+                              '${dataHoraEnsaio!.minute.toString().padLeft(2, '0')}'
+                          : 'Toque para selecionar (opcional)',
+                      style: TextStyle(
+                        color: dataHoraEnsaio != null ? Colors.black87 : Colors.grey[500],
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -154,6 +210,7 @@ class _EventosPageState extends State<EventosPage> {
                   local: localController.text,
                   dataEvento: dataComHorario.toIso8601String(),
                   descricao: 'Criado via App',
+                  dataHoraEnsaio: dataHoraEnsaio,
                 );
 
                 try {
@@ -260,6 +317,22 @@ class _EventosPageState extends State<EventosPage> {
                             Text(evento.local),
                           ],
                         ),
+                        if (evento.dataHoraEnsaio != null)
+                          Row(
+                            children: [
+                              const Icon(Icons.event_available, size: 14, color: Colors.grey),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Ensaio: '
+                                '${evento.dataHoraEnsaio!.day.toString().padLeft(2, '0')}/'
+                                '${evento.dataHoraEnsaio!.month.toString().padLeft(2, '0')}/'
+                                '${evento.dataHoraEnsaio!.year}  '
+                                '${evento.dataHoraEnsaio!.hour.toString().padLeft(2, '0')}:'
+                                '${evento.dataHoraEnsaio!.minute.toString().padLeft(2, '0')}',
+                                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                              ),
+                            ],
+                          ),
                       ],
                     ),
                     trailing: const Icon(Icons.arrow_forward_ios, size: 16),

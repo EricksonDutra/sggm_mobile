@@ -11,6 +11,7 @@ class Evento {
   final List<Musica>? repertorio;
   final List<Escala>? escalas;
   final DateTime? criadoEm;
+  final DateTime? dataHoraEnsaio; // ← NOVO
 
   Evento({
     this.id,
@@ -22,6 +23,7 @@ class Evento {
     this.tipo = 'evento',
     this.descricao,
     this.repertorio,
+    this.dataHoraEnsaio,
   });
 
   factory Evento.fromJson(Map<String, dynamic> json) {
@@ -42,6 +44,7 @@ class Evento {
       tipo: json['tipo'] ?? 'CULTO',
       escalas: (json['escalas'] as List?)?.map((e) => Escala.fromJson(e)).toList(),
       criadoEm: json['criado_em'] != null ? DateTime.parse(json['criado_em']) : null,
+      dataHoraEnsaio: json['data_hora_ensaio'] != null ? DateTime.parse(json['data_hora_ensaio']) : null,
     );
   }
 
@@ -52,6 +55,7 @@ class Evento {
       'data_evento': dataEvento,
       'local': local,
       'descricao': descricao,
+      if (dataHoraEnsaio != null) 'data_hora_ensaio': dataHoraEnsaio!.toIso8601String(),
     };
   }
 }

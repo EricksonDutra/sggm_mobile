@@ -87,7 +87,6 @@ class _EscalasPageState extends State<EscalasPage> {
     int? selectedEventoId;
     String? selectedInstrumento;
     bool mostrarCampoOutro = false;
-    DateTime? dataHoraEnsaio;
 
     showDialog(
       context: context,
@@ -216,55 +215,6 @@ class _EscalasPageState extends State<EscalasPage> {
                       ),
                     ],
                     const SizedBox(height: 16),
-                    InkWell(
-                      onTap: () async {
-                        final data = await showDatePicker(
-                          context: context,
-                          initialDate: dataHoraEnsaio ?? DateTime.now(),
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2030),
-                        );
-                        if (data == null) return;
-
-                        final hora = await showTimePicker(
-                          context: context,
-                          initialTime:
-                              dataHoraEnsaio != null ? TimeOfDay.fromDateTime(dataHoraEnsaio!) : TimeOfDay.now(),
-                        );
-                        if (hora == null) return;
-
-                        setStateDialog(() {
-                          dataHoraEnsaio = DateTime(
-                            data.year,
-                            data.month,
-                            data.day,
-                            hora.hour,
-                            hora.minute,
-                          );
-                        });
-                      },
-                      child: InputDecorator(
-                        decoration: const InputDecoration(
-                          labelText: 'Data e hora do ensaio (opcional)',
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          suffixIcon: Icon(Icons.calendar_month_outlined),
-                        ),
-                        child: Text(
-                          dataHoraEnsaio != null
-                              ? '${dataHoraEnsaio!.day.toString().padLeft(2, '0')}/'
-                                  '${dataHoraEnsaio!.month.toString().padLeft(2, '0')}/'
-                                  '${dataHoraEnsaio!.year}  '
-                                  '${dataHoraEnsaio!.hour.toString().padLeft(2, '0')}:'
-                                  '${dataHoraEnsaio!.minute.toString().padLeft(2, '0')}'
-                              : 'Toque para selecionar',
-                          style: TextStyle(
-                            color: dataHoraEnsaio != null ? Colors.black87 : Colors.grey[500],
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
                     TextField(
                       controller: obsController,
                       decoration: const InputDecoration(
@@ -314,7 +264,6 @@ class _EscalasPageState extends State<EscalasPage> {
                               eventoId: selectedEventoId!,
                               instrumentoNoEvento: instrumentoIdFinal,
                               observacao: obsController.text,
-                              dataHoraEnsaio: dataHoraEnsaio,
                             );
 
                             try {
@@ -431,16 +380,6 @@ class _EscalasPageState extends State<EscalasPage> {
             ),
             const Divider(height: 24),
             _buildInfoRow(Icons.person, escala.musicoNome ?? 'Músico #${escala.musicoId}'),
-            if (escala.dataHoraEnsaio != null)
-              _buildInfoRow(
-                Icons.event_available,
-                'Ensaio: '
-                '${escala.dataHoraEnsaio!.day.toString().padLeft(2, '0')}/'
-                '${escala.dataHoraEnsaio!.month.toString().padLeft(2, '0')}/'
-                '${escala.dataHoraEnsaio!.year}  '
-                '${escala.dataHoraEnsaio!.hour.toString().padLeft(2, '0')}:'
-                '${escala.dataHoraEnsaio!.minute.toString().padLeft(2, '0')}',
-              ),
             if (escala.instrumentoNoEvento != null) _buildInfoRow(Icons.music_note, escala.instrumentoNome.toString()),
             if (escala.observacao != null && escala.observacao!.isNotEmpty)
               _buildInfoRow(Icons.note, escala.observacao!),
