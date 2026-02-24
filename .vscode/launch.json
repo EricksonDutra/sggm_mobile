@@ -1,16 +1,32 @@
-{
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "name": "Flutter",
-            "type": "dart",
-            "request": "launch",
-            "program": "lib/main.dart"
-        }
+// {
+//     // Use IntelliSense to learn about possible attributes.
+//     // Hover to view descriptions of existing attributes.
+//     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+//     "version": "0.2.0",
+//     "configurations": [
+
+//         {
+//             "name": "Flutter",
+//             "type": "dart",
+//             "request": "launch",
+//             "program": "lib/main.dart"
+//         }
         
 
-    ]
+//     ]
+// }
+
+// .vscode/launch.json
+{
+  "configurations": [
+    {
+      "name": "Dev Local",
+      "request": "launch",
+      "type": "dart",
+      "args": [
+        "--dart-define=BASE_URL=http://192.168.100.22:8000",
+        "--dart-define=TIMEOUT_SECONDS=30"
+      ]
+    }
+  ]
 }
