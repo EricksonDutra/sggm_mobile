@@ -172,7 +172,7 @@ class _EventosPageState extends State<EventosPage> {
                               '${dataHoraEnsaio!.minute.toString().padLeft(2, '0')}'
                           : 'Toque para selecionar (opcional)',
                       style: TextStyle(
-                        color: dataHoraEnsaio != null ? Colors.black87 : Colors.grey[500],
+                        color: dataHoraEnsaio != null ? Colors.white : Colors.grey[500],
                       ),
                     ),
                   ),
@@ -213,23 +213,29 @@ class _EventosPageState extends State<EventosPage> {
                   dataHoraEnsaio: dataHoraEnsaio,
                 );
 
-                try {
-                  await Provider.of<EventoProvider>(context, listen: false).adicionarEvento(novoEvento);
-                  if (ctx.mounted) {
-                    Navigator.of(ctx).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Evento criado com sucesso!'),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  if (ctx.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Erro ao criar evento')),
-                    );
-                  }
+                // ✅ CORREÇÃO: captura o bool retornado
+                final provider = Provider.of<EventoProvider>(context, listen: false);
+                final sucesso = await provider.adicionarEvento(novoEvento);
+
+                if (!ctx.mounted) return;
+
+                if (sucesso) {
+                  Navigator.of(ctx).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Evento criado com sucesso!'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                } else {
+                  // ✅ Mostra a mensagem de erro real do backend
+                  final erro = provider.errorMessage ?? 'Erro ao criar evento';
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(erro),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
                 }
               },
               child: const Text('Salvar'),
