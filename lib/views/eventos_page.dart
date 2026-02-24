@@ -246,6 +246,207 @@ class _EventosPageState extends State<EventosPage> {
     );
   }
 
+  void _mostrarDialogoEditar(BuildContext context, Evento evento) {
+    final nomeController = TextEditingController(text: evento.nome);
+    final localController = TextEditingController(text: evento.local);
+
+    // Pré-preencher data e horário a partir do dataEvento
+    final dataAtual = DateTime.parse(evento.dataEvento);
+    DateTime dataSelecionada = dataAtual;
+    TimeOfDay horarioSelecionado = TimeOfDay(
+      hour: dataAtual.hour,
+      minute: dataAtual.minute,
+    );
+    DateTime? dataHoraEnsaio = evento.dataHoraEnsaio;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Editar Evento'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nomeController,
+                  decoration: const InputDecoration(
+                    labelText: 'Nome',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: localController,
+                  decoration: const InputDecoration(
+                    labelText: 'Local',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: dataSelecionada,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2030),
+                      locale: const Locale('pt', 'BR'),
+                      helpText: 'Selecione a data do evento',
+                      cancelText: 'Cancelar',
+                      confirmText: 'Confirmar',
+                    );
+                    if (picked != null) setState(() => dataSelecionada = picked);
+                  },
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Data do Evento',
+                      border: OutlineInputBorder(),
+                      suffixIcon: Icon(Icons.calendar_today),
+                    ),
+                    child: Text(
+                      '${dataSelecionada.day.toString().padLeft(2, '0')}/${dataSelecionada.month.toString().padLeft(2, '0')}/${dataSelecionada.year}',
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: () async {
+                    final picked = await showTimePicker(
+                      context: context,
+                      initialTime: horarioSelecionado,
+                      helpText: 'Selecione o horário',
+                      cancelText: 'Cancelar',
+                      confirmText: 'Confirmar',
+                    );
+                    if (picked != null) setState(() => horarioSelecionado = picked);
+                  },
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Horário',
+                      border: OutlineInputBorder(),
+                      suffixIcon: Icon(Icons.access_time),
+                    ),
+                    child: Text(
+                      '${horarioSelecionado.hour.toString().padLeft(2, '0')}:${horarioSelecionado.minute.toString().padLeft(2, '0')}',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: () async {
+                    final data = await showDatePicker(
+                      context: context,
+                      initialDate: dataHoraEnsaio ?? dataSelecionada,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2030),
+                      helpText: 'Data do ensaio',
+                      cancelText: 'Cancelar',
+                      confirmText: 'Confirmar',
+                    );
+                    if (data == null) return;
+                    final hora = await showTimePicker(
+                      context: context,
+                      initialTime: dataHoraEnsaio != null ? TimeOfDay.fromDateTime(dataHoraEnsaio!) : TimeOfDay.now(),
+                    );
+                    if (hora == null) return;
+                    setState(() {
+                      dataHoraEnsaio = DateTime(
+                        data.year,
+                        data.month,
+                        data.day,
+                        hora.hour,
+                        hora.minute,
+                      );
+                    });
+                  },
+                  child: InputDecorator(
+                    decoration: InputDecoration(
+                      labelText: 'Data e hora do ensaio (opcional)',
+                      border: const OutlineInputBorder(),
+                      suffixIcon: const Icon(Icons.event_available),
+                      suffix: dataHoraEnsaio != null
+                          ? GestureDetector(
+                              onTap: () => setState(() => dataHoraEnsaio = null),
+                              child: const Icon(Icons.close, size: 18),
+                            )
+                          : null,
+                    ),
+                    child: Text(
+                      dataHoraEnsaio != null
+                          ? '${dataHoraEnsaio!.day.toString().padLeft(2, '0')}/'
+                              '${dataHoraEnsaio!.month.toString().padLeft(2, '0')}/'
+                              '${dataHoraEnsaio!.year}  '
+                              '${dataHoraEnsaio!.hour.toString().padLeft(2, '0')}:'
+                              '${dataHoraEnsaio!.minute.toString().padLeft(2, '0')}'
+                          : 'Toque para selecionar (opcional)',
+                      style: TextStyle(
+                        color: dataHoraEnsaio != null ? Colors.white : Colors.grey[500],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (nomeController.text.isEmpty || localController.text.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Preencha todos os campos'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                  return;
+                }
+
+                final dataComHorario = DateTime(
+                  dataSelecionada.year,
+                  dataSelecionada.month,
+                  dataSelecionada.day,
+                  horarioSelecionado.hour,
+                  horarioSelecionado.minute,
+                );
+
+                final eventoAtualizado = Evento(
+                  id: evento.id,
+                  nome: nomeController.text,
+                  local: localController.text,
+                  dataEvento: dataComHorario.toIso8601String(),
+                  descricao: evento.descricao,
+                  dataHoraEnsaio: dataHoraEnsaio,
+                );
+
+                final provider = Provider.of<EventoProvider>(context, listen: false);
+                final sucesso = await provider.atualizarEvento(evento.id!, eventoAtualizado);
+
+                if (!ctx.mounted) return;
+
+                Navigator.of(ctx).pop();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(sucesso
+                        ? 'Evento atualizado com sucesso!'
+                        : provider.errorMessage ?? 'Erro ao atualizar evento'),
+                    backgroundColor: sucesso ? Colors.green : Colors.red,
+                  ),
+                );
+              },
+              child: const Text('Salvar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isLider = Provider.of<AuthProvider>(context).isLider;
@@ -341,7 +542,45 @@ class _EventosPageState extends State<EventosPage> {
                           ),
                       ],
                     ),
-                    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                    trailing: isLider
+                        ? PopupMenuButton<String>(
+                            icon: const Icon(Icons.more_vert),
+                            onSelected: (value) {
+                              if (value == 'editar') {
+                                _mostrarDialogoEditar(context, evento);
+                              } else if (value == 'detalhes') {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => EventoDetalhesPage(evento: evento),
+                                  ),
+                                );
+                              }
+                            },
+                            itemBuilder: (_) => const [
+                              PopupMenuItem(
+                                value: 'detalhes',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.info_outline, size: 18),
+                                    SizedBox(width: 8),
+                                    Text('Ver detalhes'),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: 'editar',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.edit_outlined, size: 18, color: Colors.teal),
+                                    SizedBox(width: 8),
+                                    Text('Editar evento', style: TextStyle(color: Colors.teal)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          )
+                        : const Icon(Icons.arrow_forward_ios, size: 16),
                     onTap: () {
                       Navigator.push(
                         context,

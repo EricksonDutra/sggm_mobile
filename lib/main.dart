@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'package:sggm/controllers/auth_controller.dart';
+import 'package:sggm/controllers/comentarios_controller.dart';
 import 'package:sggm/controllers/escalas_controller.dart';
 import 'package:sggm/controllers/eventos_controller.dart';
 import 'package:sggm/controllers/instrumentos_controller.dart';
@@ -73,6 +74,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => MusicosProvider()),
         ChangeNotifierProvider(create: (_) => InstrumentosProvider()),
         ChangeNotifierProvider(create: (_) => MusicasProvider()),
+        ChangeNotifierProvider(create: (_) => ComentariosProvider()),
       ],
       child: Consumer<AuthProvider>(
         builder: (context, authProvider, _) {

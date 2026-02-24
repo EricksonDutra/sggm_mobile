@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:sggm/controllers/auth_controller.dart'; // ✅ ADICIONAR
+import 'package:sggm/controllers/auth_controller.dart';
 import 'package:sggm/models/instrumentos.dart';
 import 'package:sggm/util/app_logger.dart';
 import 'package:sggm/views/musica_detalhes_page.dart';
@@ -15,6 +15,8 @@ import 'package:sggm/controllers/musicas_controller.dart';
 import 'package:sggm/controllers/musicos_controller.dart';
 import 'package:sggm/models/escalas.dart';
 import 'package:sggm/models/eventos.dart';
+
+import 'package:sggm/views/comentarios_page.dart';
 
 class EventoDetalhesPage extends StatefulWidget {
   final Evento evento;
@@ -80,6 +82,15 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
       return instrumento.nome;
     } catch (e) {
       return 'Desconhecido';
+    }
+  }
+
+  bool get _eventoJaAconteceu {
+    try {
+      final data = DateTime.parse(widget.evento.dataEvento);
+      return data.isBefore(DateTime.now());
+    } catch (_) {
+      return false;
     }
   }
 
@@ -516,7 +527,31 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
                                       const SizedBox(width: 4),
                                       if (musica.linkCifra != null && musica.linkCifra!.isNotEmpty)
                                         const Icon(Icons.music_note, color: Colors.blue, size: 20),
-                                      const SizedBox(width: 8),
+                                      const SizedBox(width: 4),
+                                      IconButton(
+                                        icon: Icon(
+                                          Icons.chat_bubble_outline,
+                                          size: 20,
+                                          color: _eventoJaAconteceu ? Colors.teal : Colors.grey[600],
+                                        ),
+                                        tooltip: _eventoJaAconteceu ? 'Comentários' : 'Disponível após o evento',
+                                        onPressed: _eventoJaAconteceu
+                                            ? () {
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (_) => ComentariosPage(
+                                                      eventoId: eventoAtual.id!,
+                                                      eventoNome: eventoAtual.nome,
+                                                      eventoDataEvento: eventoAtual.dataEvento,
+                                                      musica: musica,
+                                                    ),
+                                                  ),
+                                                );
+                                              }
+                                            : null, // ← null desabilita o botão automaticamente no Flutter
+                                      ),
+                                      const SizedBox(width: 4),
                                       const Icon(Icons.arrow_forward_ios, size: 16),
                                     ],
                                   ),
