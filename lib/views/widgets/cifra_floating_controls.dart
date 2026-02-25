@@ -29,7 +29,7 @@ class CifraFloatingControls extends StatefulWidget {
 class _CifraFloatingControlsState extends State<CifraFloatingControls> with SingleTickerProviderStateMixin {
   // ── Estado ──────────────────────────────────────────────────────────────────
   bool _expandido = false;
-  Offset _posicao = const Offset(16, 120);
+  Offset _posicao = const Offset(160, 10);
 
   late AnimationController _animController;
   late Animation<double> _scaleAnim;

@@ -9,10 +9,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Enum
-// ─────────────────────────────────────────────────────────────────────────────
-
 enum ModoCifra { nativa, web }
 
 // ─────────────────────────────────────────────────────────────────────────────
