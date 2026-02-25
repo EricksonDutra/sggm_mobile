@@ -27,16 +27,30 @@ class CifraParser {
     for (final match in matches) {
       final acorde = match.group(1)!;
       final textoAntes = linha.substring(cursorLetra, match.start).replaceAll(_acordeRegex, '');
+
       bufLetra.write(textoAntes);
+
       final posicao = bufLetra.length;
       final espacos = posicao - bufAcorde.length;
       if (espacos > 0) bufAcorde.write(' ' * espacos);
+
       bufAcorde.write(acorde);
       cursorLetra = match.end;
     }
-    bufLetra.write(linha.substring(cursorLetra).replaceAll(_acordeRegex, ''));
 
-    return LinhaParseada(acordes: bufAcorde.toString(), letra: bufLetra.toString());
+    bufLetra.write(
+      linha.substring(cursorLetra).replaceAll(_acordeRegex, ''),
+    );
+
+    // Iguala comprimentos: acorde define o tamanho quando maior, letra quando maior
+    final diff = bufAcorde.length - bufLetra.length;
+    if (diff > 0) bufLetra.write(' ' * diff);
+    if (diff < 0) bufAcorde.write(' ' * diff.abs());
+
+    return LinhaParseada(
+      acordes: bufAcorde.toString(),
+      letra: bufLetra.toString(),
+    );
   }
 
   static String transporAcorde(String acorde, int semitons) {
