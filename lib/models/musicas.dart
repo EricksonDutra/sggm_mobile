@@ -6,6 +6,7 @@ class Musica {
   final String? tom;
   final String? linkCifra;
   final String? linkYoutube;
+  final String? conteudoCifra;
 
   Musica({
     this.id,
@@ -15,6 +16,7 @@ class Musica {
     this.tom,
     this.linkCifra,
     this.linkYoutube,
+    this.conteudoCifra,
   });
 
   factory Musica.fromJson(Map<String, dynamic> json) {
@@ -26,6 +28,7 @@ class Musica {
       tom: json['tom'], // Pode ser null
       linkCifra: json['link_cifra'],
       linkYoutube: json['link_youtube'],
+      conteudoCifra: json['conteudo_cifra'],
     );
   }
 
@@ -37,6 +40,7 @@ class Musica {
       'tom': tom,
       'link_cifra': (linkCifra != null && linkCifra!.isEmpty) ? null : linkCifra,
       'link_youtube': (linkYoutube != null && linkYoutube!.isEmpty) ? null : linkYoutube,
+      'conteudo_cifra': conteudoCifra,
     };
   }
 
