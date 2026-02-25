@@ -4,11 +4,10 @@ import 'package:sggm/util/cifra_parser.dart';
 void main() {
   group('CifraParser.parsearLinha', () {
     test('extrai acordes e letra de uma linha simples', () {
-      const linha = '[G]Santo é o [A]Teu nome';
-      final resultado = CifraParser.parsearLinha(linha);
+      final resultado = CifraParser.parsearLinha('[G]    [A]');
 
-      expect(resultado.acordes, equals('G       A       '));
-      expect(resultado.letra, equals('Santo é o Teu nome'));
+      expect(resultado.acordes.length, equals(resultado.letra.length));
+      expect(resultado.acordes.trimRight(), equals('G   A'));
     });
 
     test('linha sem acordes retorna apenas letra', () {

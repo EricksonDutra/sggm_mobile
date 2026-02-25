@@ -27,15 +27,18 @@ class CifraFloatingControls extends StatefulWidget {
 }
 
 class _CifraFloatingControlsState extends State<CifraFloatingControls> with SingleTickerProviderStateMixin {
+  // ── Estado ──────────────────────────────────────────────────────────────────
   bool _expandido = false;
   Offset _posicao = const Offset(16, 120);
+
   late AnimationController _animController;
   late Animation<double> _scaleAnim;
 
-  // Altura estimada do painel expandido (sem velocidade)
-  static const double _painelAltura = 220.0;
+  // ── Constantes ───────────────────────────────────────────────────────────────
   static const double _botaoSize = 44.0;
   static const double _painelLargura = 200.0;
+
+  // ── Lifecycle ────────────────────────────────────────────────────────────────
 
   @override
   void initState() {
@@ -56,9 +59,22 @@ class _CifraFloatingControlsState extends State<CifraFloatingControls> with Sing
     super.dispose();
   }
 
-  void _toggle() {
-    setState(() => _expandido = !_expandido);
-    _expandido ? _animController.forward() : _animController.reverse();
+  // ── Lógica de posicionamento ─────────────────────────────────────────────────
+
+  bool get _abreParaCima {
+    final size = MediaQuery.of(context).size;
+    return _posicao.dy > size.height / 2;
+  }
+
+  bool get _abreParaEsquerda {
+    final size = MediaQuery.of(context).size;
+    return _posicao.dx > size.width - _painelLargura - 20;
+  }
+
+  /// Coordenada bottom do botão em relação à tela (para ancorar Positioned)
+  double get _bottomDoBotao {
+    final size = MediaQuery.of(context).size;
+    return size.height - _posicao.dy - _botaoSize;
   }
 
   void _mover(Offset delta) {
@@ -71,48 +87,65 @@ class _CifraFloatingControlsState extends State<CifraFloatingControls> with Sing
     });
   }
 
-  /// Decide se o painel abre para cima ou para baixo
-  /// baseado na posição do botão na tela
-  bool get _abreParaCima {
-    final size = MediaQuery.of(context).size;
-    return _posicao.dy > size.height / 2;
+  void _toggle() {
+    setState(() => _expandido = !_expandido);
+    _expandido ? _animController.forward() : _animController.reverse();
   }
 
-  /// Decide se o painel abre para esquerda ou direita
-  bool get _abreParaEsquerda {
-    final size = MediaQuery.of(context).size;
-    return _posicao.dx > size.width - _painelLargura - 20;
-  }
+  // ── Build ────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
+    // Quando abre para cima: ancora pelo bottom para o painel crescer
+    // para cima sem sair da tela nem perder o hit-test
+    if (_abreParaCima) {
+      return Positioned(
+        left: _posicao.dx,
+        bottom: _bottomDoBotao,
+        child: _buildEmpilhadoCima(),
+      );
+    }
+
     return Positioned(
       left: _posicao.dx,
       top: _posicao.dy,
-      child: _abreParaCima
-          ? Column(
-              crossAxisAlignment: _abreParaEsquerda ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (_expandido) _buildPainel(),
-                if (_expandido) const SizedBox(height: 8),
-                _buildBotaoPrincipal(),
-              ],
-            )
-          : Column(
-              crossAxisAlignment: _abreParaEsquerda ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildBotaoPrincipal(),
-                if (_expandido) const SizedBox(height: 8),
-                if (_expandido) _buildPainel(),
-              ],
-            ),
+      child: _buildEmpilhadoBaixo(),
     );
   }
 
+  Widget _buildEmpilhadoCima() {
+    return Column(
+      crossAxisAlignment: _abreParaEsquerda ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (_expandido) ...[
+          _buildPainel(),
+          const SizedBox(height: 8),
+        ],
+        _buildBotaoPrincipal(),
+      ],
+    );
+  }
+
+  Widget _buildEmpilhadoBaixo() {
+    return Column(
+      crossAxisAlignment: _abreParaEsquerda ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildBotaoPrincipal(),
+        if (_expandido) ...[
+          const SizedBox(height: 8),
+          _buildPainel(),
+        ],
+      ],
+    );
+  }
+
+  // ── Botão principal ──────────────────────────────────────────────────────────
+
   Widget _buildBotaoPrincipal() {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: _toggle,
       onPanUpdate: (d) => _mover(d.delta),
       child: AnimatedContainer(
@@ -140,9 +173,9 @@ class _CifraFloatingControlsState extends State<CifraFloatingControls> with Sing
     );
   }
 
-  Widget _buildPainel() {
-    final bool scrollAtivo = widget.autoScrollAtivo;
+  // ── Painel expandido ─────────────────────────────────────────────────────────
 
+  Widget _buildPainel() {
     return ScaleTransition(
       scale: _scaleAnim,
       alignment: _abreParaCima
@@ -155,7 +188,6 @@ class _CifraFloatingControlsState extends State<CifraFloatingControls> with Sing
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: AppTheme.presbyterianoVerde.withValues(alpha: 0.4),
-            width: 1,
           ),
           boxShadow: [
             BoxShadow(
@@ -169,122 +201,129 @@ class _CifraFloatingControlsState extends State<CifraFloatingControls> with Sing
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Cabeçalho arrastável ──────────────────
-            GestureDetector(
-              onPanUpdate: (d) => _mover(d.delta),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: AppTheme.presbyterianoVerde.withValues(alpha: 0.15),
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-                ),
-                child: const Row(
-                  children: [
-                    Text(
-                      'CONTROLES',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.presbyterianoVerdeClaro,
-                        letterSpacing: 1.4,
-                      ),
-                    ),
-                    Spacer(),
-                    // Ícone de arrastar para sinalizar ao usuário
-                    Icon(Icons.drag_indicator, size: 16, color: Colors.white38),
-                  ],
-                ),
-              ),
-            ),
-
-            // ── Corpo ─────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Fonte
-                  _buildLabel(Icons.text_fields, 'Fonte'),
-                  _buildControlRow(
-                    valor: '${widget.config.fontSize.toInt()}px',
-                    onMenos: widget.onFonteMenos,
-                    onMais: widget.onFonteMais,
-                    iconMenos: Icons.text_decrease,
-                    iconMais: Icons.text_increase,
-                  ),
-
-                  const _Divisor(),
-
-                  // Auto-scroll
-                  _buildLabel(Icons.auto_mode, 'Auto-scroll'),
-                  const SizedBox(height: 6),
-                  SizedBox(
-                    width: double.infinity,
-                    child: GestureDetector(
-                      onTap: widget.onToggleScroll,
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        decoration: BoxDecoration(
-                          color: scrollAtivo
-                              ? AppTheme.presbyterianoVerde
-                              : AppTheme.presbyterianoVerde.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppTheme.presbyterianoVerde),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              scrollAtivo ? Icons.pause : Icons.play_arrow,
-                              size: 16,
-                              color: Colors.white,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              scrollAtivo ? 'Pausar' : 'Iniciar',
-                              style: const TextStyle(
-                                fontSize: 13,
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // Velocidade (só quando ativo)
-                  AnimatedSize(
-                    duration: const Duration(milliseconds: 180),
-                    child: scrollAtivo
-                        ? Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const SizedBox(height: 10),
-                              _buildLabel(Icons.speed, 'Velocidade'),
-                              _buildControlRow(
-                                valor: '${widget.config.velocidade.toInt()}',
-                                onMenos: widget.onVelocidadeMenos,
-                                onMais: widget.onVelocidadeMais,
-                                iconMenos: Icons.remove,
-                                iconMais: Icons.add,
-                              ),
-                            ],
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-                ],
-              ),
-            ),
+            _buildCabecalho(),
+            _buildCorpo(),
           ],
         ),
       ),
     );
   }
+
+  Widget _buildCabecalho() {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque, // captura área vazia entre widgets
+      onPanUpdate: (d) => _mover(d.delta),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppTheme.presbyterianoVerde.withValues(alpha: 0.15),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+        ),
+        child: const Row(
+          children: [
+            Text(
+              'CONTROLES',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.presbyterianoVerdeClaro,
+                letterSpacing: 1.4,
+              ),
+            ),
+            Spacer(),
+            Icon(Icons.drag_indicator, size: 16, color: Colors.white38),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCorpo() {
+    final scrollAtivo = widget.autoScrollAtivo;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildLabel(Icons.text_fields, 'Fonte'),
+          _buildControlRow(
+            valor: '${widget.config.fontSize.toInt()}px',
+            onMenos: widget.onFonteMenos,
+            onMais: widget.onFonteMais,
+            iconMenos: Icons.text_decrease,
+            iconMais: Icons.text_increase,
+          ),
+          const _Divisor(),
+          _buildLabel(Icons.auto_mode, 'Auto-scroll'),
+          const SizedBox(height: 6),
+          _buildBotaoScroll(scrollAtivo),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 180),
+            child: scrollAtivo ? _buildControleVelocidade() : const SizedBox.shrink(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBotaoScroll(bool scrollAtivo) {
+    return SizedBox(
+      width: double.infinity,
+      child: GestureDetector(
+        onTap: widget.onToggleScroll,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: scrollAtivo ? AppTheme.presbyterianoVerde : AppTheme.presbyterianoVerde.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppTheme.presbyterianoVerde),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                scrollAtivo ? Icons.pause : Icons.play_arrow,
+                size: 16,
+                color: Colors.white,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                scrollAtivo ? 'Pausar' : 'Iniciar',
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildControleVelocidade() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 10),
+        _buildLabel(Icons.speed, 'Velocidade'),
+        _buildControlRow(
+          valor: '${widget.config.velocidade.toInt()}',
+          onMenos: widget.onVelocidadeMenos,
+          onMais: widget.onVelocidadeMais,
+          iconMenos: Icons.remove,
+          iconMais: Icons.add,
+        ),
+      ],
+    );
+  }
+
+  // ── Widgets auxiliares ───────────────────────────────────────────────────────
 
   Widget _buildLabel(IconData icon, String texto) {
     return Padding(
@@ -313,7 +352,11 @@ class _CifraFloatingControlsState extends State<CifraFloatingControls> with Sing
           child: Center(
             child: Text(
               valor,
-              style: const TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                fontSize: 14,
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ),
@@ -324,6 +367,7 @@ class _CifraFloatingControlsState extends State<CifraFloatingControls> with Sing
 
   Widget _buildIconBtn(IconData icon, VoidCallback onTap) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
         width: 32,
@@ -341,6 +385,7 @@ class _CifraFloatingControlsState extends State<CifraFloatingControls> with Sing
 
 class _Divisor extends StatelessWidget {
   const _Divisor();
+
   @override
   Widget build(BuildContext context) {
     return const Padding(

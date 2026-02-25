@@ -301,6 +301,7 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
   Widget _buildTabBarView() {
     return TabBarView(
       controller: _tabController,
+      physics: const NeverScrollableScrollPhysics(),
       children: [
         if (_hasYoutube) _buildYoutubeTab(),
         if (_hasCifra) _buildCifraTab(),
