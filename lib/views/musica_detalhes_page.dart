@@ -3,6 +3,9 @@ import 'package:sggm/models/musicas.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:sggm/util/cifra_parser.dart';
+import 'package:sggm/views/widgets/cifra_secao_widget.dart';
+import 'package:sggm/theme/app_theme.dart';
 
 class MusicaDetalhesPage extends StatefulWidget {
   final Musica musica;
@@ -17,18 +20,22 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
   late TabController _tabController;
   YoutubePlayerController? _youtubeController;
   WebViewController? _webViewController;
-  bool _hasYoutube = false;
+  final bool _hasYoutube = false;
   bool _hasCifra = false;
   bool _webViewInitialized = false;
   bool _isLoadingWebView = false;
   String? _tomAtual;
+  int _semitonsDelta = 0;
+  String? _tomAtualDisplay;
+  bool _hasCifraNativa = false;
 
   @override
   void initState() {
     super.initState();
     _tomAtual = widget.musica.tom;
-    _hasYoutube = widget.musica.linkYoutube != null && widget.musica.linkYoutube!.isNotEmpty;
-    _hasCifra = widget.musica.linkCifra != null && widget.musica.linkCifra!.isNotEmpty;
+    _tomAtualDisplay = widget.musica.tom;
+    _hasCifraNativa = widget.musica.conteudoCifra != null && widget.musica.conteudoCifra!.isNotEmpty;
+    _hasCifra = _hasCifraNativa || (widget.musica.linkCifra != null && widget.musica.linkCifra!.isNotEmpty);
 
     int tabCount = 0;
     if (_hasYoutube) tabCount++;
@@ -52,6 +59,99 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
     if (_hasCifra && widget.musica.linkCifra != null) {
       _initializeWebView();
     }
+  }
+
+  void _transporTom(int delta) {
+    final tons = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    setState(() {
+      _semitonsDelta += delta;
+      if (widget.musica.tom != null && tons.contains(widget.musica.tom)) {
+        final index = tons.indexOf(widget.musica.tom!);
+        final novoIndex = ((index + _semitonsDelta) % 12 + 12) % 12;
+        _tomAtualDisplay = tons[novoIndex];
+      }
+    });
+  }
+
+  Widget _buildCifraTab() {
+    if (_hasCifraNativa) return _buildCifraNativa();
+    if (_webViewController != null) return _buildCifraWebView();
+    return const Center(child: Text('Cifra não disponível'));
+  }
+
+  Widget _buildCifraWebView() {
+    if (_webViewController == null) {
+      return Container(
+        color: Colors.grey[100],
+        child: const Center(
+          child: Text(
+            'Não foi possível carregar a cifra',
+            style: TextStyle(color: Colors.grey),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      color: Colors.grey[100],
+      child: Column(
+        children: [
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.all(8.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: _mostrarSeletorTom,
+                    child: Row(
+                      children: [
+                        Text(
+                          'Tom: ${widget.musica.tom ?? "Não informado"}',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.edit, size: 16, color: Colors.blue),
+                      ],
+                    ),
+                  ),
+                ),
+                if (_isLoadingWebView)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 8.0),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                IconButton(
+                  icon: const Icon(Icons.open_in_browser, color: Colors.black87),
+                  tooltip: 'Abrir no navegador',
+                  onPressed: () => _abrirLink(widget.musica.linkCifra!),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Stack(
+              children: [
+                WebViewWidget(controller: _webViewController!),
+                if (_isLoadingWebView)
+                  Container(
+                    color: Colors.grey[100],
+                    child: const LinearProgressIndicator(),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _mostrarSeletorTom() {
@@ -230,78 +330,74 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
     );
   }
 
-  Widget _buildCifraTab() {
-    if (_webViewController == null) {
-      return Container(
-        color: Colors.grey[100],
-        child: const Center(
-          child: Text(
-            'Não foi possível carregar a cifra',
-            style: TextStyle(color: Colors.grey),
+  Widget _buildCifraNativa() {
+    final conteudo = CifraParser.transporCifra(widget.musica.conteudoCifra!, _semitonsDelta);
+    final secoes = CifraParser.parsearSecoes(conteudo);
+
+    return Column(
+      children: [
+        // Barra de controles
+        Container(
+          color: const Color(0xFF1E1E1E),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              const Icon(Icons.music_note, size: 18, color: AppTheme.presbyterianoVerdeClaro),
+              const SizedBox(width: 6),
+              Text(
+                'Tom: ${_tomAtualDisplay ?? widget.musica.tom ?? "?"}',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
+              ),
+              const SizedBox(width: 8),
+              if (_semitonsDelta != 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppTheme.presbyterianoVerde.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    '${_semitonsDelta > 0 ? "+" : ""}$_semitonsDelta',
+                    style: const TextStyle(fontSize: 11, color: AppTheme.presbyterianoVerdeClaro),
+                  ),
+                ),
+              const Spacer(),
+              IconButton(
+                onPressed: () => _transporTom(-1),
+                icon: const Icon(Icons.remove_circle_outline),
+                color: AppTheme.presbyterianoVerdeClaro,
+                tooltip: 'Diminuir tom',
+              ),
+              IconButton(
+                onPressed: () => _transporTom(1),
+                icon: const Icon(Icons.add_circle_outline),
+                color: AppTheme.presbyterianoVerdeClaro,
+                tooltip: 'Aumentar tom',
+              ),
+              if (_semitonsDelta != 0)
+                IconButton(
+                  onPressed: () => setState(() {
+                    _semitonsDelta = 0;
+                    _tomAtualDisplay = widget.musica.tom;
+                  }),
+                  icon: const Icon(Icons.refresh),
+                  color: Colors.white54,
+                  tooltip: 'Resetar tom',
+                ),
+            ],
           ),
         ),
-      );
-    }
-
-    return Container(
-      color: Colors.grey[100],
-      child: Column(
-        children: [
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.all(8.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap: _mostrarSeletorTom,
-                    child: Row(
-                      children: [
-                        Text(
-                          'Tom: ${widget.musica.tom ?? "Não informado"}',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        const Icon(Icons.edit, size: 16, color: Colors.blue),
-                      ],
-                    ),
-                  ),
-                ),
-                if (_isLoadingWebView)
-                  const Padding(
-                    padding: EdgeInsets.only(right: 8.0),
-                    child: SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  ),
-                IconButton(
-                  icon: const Icon(Icons.open_in_browser, color: Colors.black87),
-                  tooltip: 'Abrir no navegador',
-                  onPressed: () => _abrirLink(widget.musica.linkCifra!),
-                ),
-              ],
+        // Conteúdo da cifra
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: secoes.map((s) => CifraSecaoWidget(secao: s)).toList(),
             ),
           ),
-          Expanded(
-            child: Stack(
-              children: [
-                WebViewWidget(controller: _webViewController!),
-                if (_isLoadingWebView)
-                  Container(
-                    color: Colors.grey[100],
-                    child: const LinearProgressIndicator(),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
