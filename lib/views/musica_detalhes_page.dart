@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:sggm/models/musicas.dart';
+import 'package:sggm/util/cifra_scroll_controller.dart';
+import 'package:sggm/views/widgets/cifra_floating_controls.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:sggm/util/cifra_parser.dart';
 import 'package:sggm/views/widgets/cifra_secao_widget.dart';
 import 'package:sggm/theme/app_theme.dart';
+
+enum ModoCifra { nativa, web }
 
 class MusicaDetalhesPage extends StatefulWidget {
   final Musica musica;
@@ -26,8 +30,12 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
   bool _isLoadingWebView = false;
   String? _tomAtual;
   int _semitonsDelta = 0;
+  final ScrollController _scrollController = ScrollController();
+  CifraScrollConfig _scrollConfig = const CifraScrollConfig();
+  bool _autoScrollAtivo = false;
   String? _tomAtualDisplay;
   bool _hasCifraNativa = false;
+  ModoCifra _modoCifra = ModoCifra.nativa;
 
   @override
   void initState() {
@@ -36,7 +44,9 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
     _tomAtualDisplay = widget.musica.tom;
     _hasCifraNativa = widget.musica.conteudoCifra != null && widget.musica.conteudoCifra!.isNotEmpty;
     _hasCifra = _hasCifraNativa || (widget.musica.linkCifra != null && widget.musica.linkCifra!.isNotEmpty);
-
+    if (!_hasCifraNativa && _hasCifra) {
+      _modoCifra = ModoCifra.web;
+    }
     int tabCount = 0;
     if (_hasYoutube) tabCount++;
     if (_hasCifra) tabCount++;
@@ -74,9 +84,97 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
   }
 
   Widget _buildCifraTab() {
-    if (_hasCifraNativa) return _buildCifraNativa();
-    if (_webViewController != null) return _buildCifraWebView();
-    return const Center(child: Text('Cifra não disponível'));
+    final temNativa = _hasCifraNativa;
+    final temWeb = widget.musica.linkCifra != null && widget.musica.linkCifra!.isNotEmpty;
+
+    // Sem nenhuma das duas
+    if (!temNativa && !temWeb) {
+      return const Center(child: Text('Cifra não disponível'));
+    }
+
+    // Só tem uma opção — vai direto sem seletor
+    if (temNativa && !temWeb) return _buildCifraNativa();
+    if (!temNativa && temWeb) return _buildCifraWebView();
+
+    // Tem as duas — mostra seletor
+    return Column(
+      children: [
+        _buildSeletorModoCifra(),
+        Expanded(
+          child: _modoCifra == ModoCifra.nativa ? _buildCifraNativa() : _buildCifraWebView(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSeletorModoCifra() {
+    return Container(
+      color: const Color(0xFF1A1A1A),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildChipModo(
+            label: 'Local',
+            icon: Icons.phonelink_outlined,
+            modo: ModoCifra.nativa,
+          ),
+          const SizedBox(width: 8),
+          _buildChipModo(
+            label: 'Web',
+            icon: Icons.language,
+            modo: ModoCifra.web,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChipModo({
+    required String label,
+    required IconData icon,
+    required ModoCifra modo,
+  }) {
+    final selecionado = _modoCifra == modo;
+    return GestureDetector(
+      onTap: () {
+        if (_modoCifra == modo) return;
+        setState(() => _modoCifra = modo);
+        // Inicializa WebView só quando o usuário escolher web pela primeira vez
+        if (modo == ModoCifra.web) _initializeWebView();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        decoration: BoxDecoration(
+          color: selecionado ? AppTheme.presbyterianoVerde : AppTheme.backgroundTerciario,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selecionado ? AppTheme.presbyterianoVerde : Colors.white24,
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: selecionado ? Colors.white : Colors.white54,
+            ),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: selecionado ? FontWeight.w700 : FontWeight.w400,
+                color: selecionado ? Colors.white : Colors.white54,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildCifraWebView() {
@@ -232,10 +330,35 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
     }
   }
 
+  void _toggleAutoScroll() {
+    setState(() => _autoScrollAtivo = !_autoScrollAtivo);
+    if (_autoScrollAtivo) _iniciarAutoScroll();
+  }
+
+  void _iniciarAutoScroll() async {
+    while (_autoScrollAtivo && mounted) {
+      if (_scrollController.hasClients) {
+        final maxExtent = _scrollController.position.maxScrollExtent;
+        final atual = _scrollController.offset;
+        if (atual >= maxExtent) {
+          setState(() => _autoScrollAtivo = false);
+          break;
+        }
+        await _scrollController.animateTo(
+          atual + 1,
+          duration: Duration(milliseconds: (1000 ~/ _scrollConfig.velocidade * 10)),
+          curve: Curves.linear,
+        );
+      }
+      await Future.delayed(const Duration(milliseconds: 16)); // ~60fps
+    }
+  }
+
   @override
   void dispose() {
     _youtubeController?.dispose();
     _tabController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -331,71 +454,102 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
   }
 
   Widget _buildCifraNativa() {
-    final conteudo = CifraParser.transporCifra(widget.musica.conteudoCifra!, _semitonsDelta);
+    final conteudo = CifraParser.transporCifra(
+      widget.musica.conteudoCifra!,
+      _semitonsDelta,
+    );
     final secoes = CifraParser.parsearSecoes(conteudo);
 
-    return Column(
+    return Stack(
       children: [
-        // Barra de controles
-        Container(
-          color: const Color(0xFF1E1E1E),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: [
-              const Icon(Icons.music_note, size: 18, color: AppTheme.presbyterianoVerdeClaro),
-              const SizedBox(width: 6),
-              Text(
-                'Tom: ${_tomAtualDisplay ?? widget.musica.tom ?? "?"}',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
-              ),
-              const SizedBox(width: 8),
-              if (_semitonsDelta != 0)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppTheme.presbyterianoVerde.withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(4),
+        // ── Conteúdo da cifra ─────────────────────────
+        Column(
+          children: [
+            // Barra de tom (única barra fixa que permanece)
+            Container(
+              color: const Color(0xFF1E1E1E),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              child: Row(
+                children: [
+                  const Icon(Icons.music_note, size: 16, color: AppTheme.presbyterianoVerdeClaro),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Tom: ${_tomAtualDisplay ?? widget.musica.tom ?? "?"}',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white),
                   ),
-                  child: Text(
-                    '${_semitonsDelta > 0 ? "+" : ""}$_semitonsDelta',
-                    style: const TextStyle(fontSize: 11, color: AppTheme.presbyterianoVerdeClaro),
+                  if (_semitonsDelta != 0) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: AppTheme.presbyterianoVerde.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        '${_semitonsDelta > 0 ? "+" : ""}$_semitonsDelta',
+                        style: const TextStyle(fontSize: 11, color: AppTheme.presbyterianoVerdeClaro),
+                      ),
+                    ),
+                  ],
+                  const Spacer(),
+                  IconButton(
+                    onPressed: () => _transporTom(-1),
+                    icon: const Icon(Icons.remove_circle_outline, size: 20),
+                    color: AppTheme.presbyterianoVerdeClaro,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                   ),
-                ),
-              const Spacer(),
-              IconButton(
-                onPressed: () => _transporTom(-1),
-                icon: const Icon(Icons.remove_circle_outline),
-                color: AppTheme.presbyterianoVerdeClaro,
-                tooltip: 'Diminuir tom',
+                  IconButton(
+                    onPressed: () => _transporTom(1),
+                    icon: const Icon(Icons.add_circle_outline, size: 20),
+                    color: AppTheme.presbyterianoVerdeClaro,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  ),
+                  if (_semitonsDelta != 0)
+                    IconButton(
+                      onPressed: () => setState(() {
+                        _semitonsDelta = 0;
+                        _tomAtualDisplay = widget.musica.tom;
+                      }),
+                      icon: const Icon(Icons.refresh, size: 20),
+                      color: Colors.white54,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    ),
+                ],
               ),
-              IconButton(
-                onPressed: () => _transporTom(1),
-                icon: const Icon(Icons.add_circle_outline),
-                color: AppTheme.presbyterianoVerdeClaro,
-                tooltip: 'Aumentar tom',
-              ),
-              if (_semitonsDelta != 0)
-                IconButton(
-                  onPressed: () => setState(() {
-                    _semitonsDelta = 0;
-                    _tomAtualDisplay = widget.musica.tom;
-                  }),
-                  icon: const Icon(Icons.refresh),
-                  color: Colors.white54,
-                  tooltip: 'Resetar tom',
-                ),
-            ],
-          ),
-        ),
-        // Conteúdo da cifra
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: secoes.map((s) => CifraSecaoWidget(secao: s)).toList(),
             ),
-          ),
+
+            // Cifra rolável
+            Expanded(
+              child: SingleChildScrollView(
+                controller: _scrollController,
+                padding: const EdgeInsets.fromLTRB(16, 16, 72, 80),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ...secoes.map((s) => CifraSecaoWidget(
+                          secao: s,
+                          fontSize: _scrollConfig.fontSize,
+                        )),
+                    const SizedBox(height: 80),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+
+        // ── Painel flutuante ───────────────────────────
+        CifraFloatingControls(
+          config: _scrollConfig,
+          autoScrollAtivo: _autoScrollAtivo,
+          onToggleScroll: _toggleAutoScroll,
+          onFonteMais: () => setState(() => _scrollConfig = _scrollConfig.aumentarFonte()),
+          onFonteMenos: () => setState(() => _scrollConfig = _scrollConfig.diminuirFonte()),
+          onVelocidadeMais: () => setState(() => _scrollConfig = _scrollConfig.aumentarVelocidade()),
+          onVelocidadeMenos: () => setState(() => _scrollConfig = _scrollConfig.diminuirVelocidade()),
         ),
       ],
     );
