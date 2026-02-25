@@ -79,6 +79,7 @@ class CifraParser {
 
     for (final linha in conteudo.split('\n')) {
       final l = linha.trim();
+
       if (l == '{start_of_intro}') {
         tipoAtual = TipoSecao.intro;
         linhasAtual = [];
@@ -92,12 +93,32 @@ class CifraParser {
         tipoAtual = TipoSecao.ponte;
         linhasAtual = [];
       } else if (l.startsWith('{end_of_')) {
-        if (tipoAtual != null) secoes.add(SecaoCifra(tipo: tipoAtual, linhas: List.from(linhasAtual)));
-        tipoAtual = null;
-      } else if (tipoAtual != null && l.isNotEmpty) {
-        linhasAtual.add(linha);
+        if (tipoAtual != null) {
+          secoes.add(SecaoCifra(tipo: tipoAtual, linhas: List.from(linhasAtual)));
+          tipoAtual = null;
+          linhasAtual.clear();
+        }
+      } else if (l.isNotEmpty) {
+        tipoAtual ??= TipoSecao.verso;
+
+        String linhaLimpa = linha;
+
+        if (l.startsWith('{comment:') || l.startsWith('{c:')) {
+          final regex = RegExp(r'\{c(?:omment)?:\s*(.*?)\}');
+          final match = regex.firstMatch(l);
+          if (match != null) {
+            linhaLimpa = match.group(1)!;
+          }
+        }
+
+        linhasAtual.add(linhaLimpa);
       }
     }
+
+    if (linhasAtual.isNotEmpty) {
+      secoes.add(SecaoCifra(tipo: tipoAtual ?? TipoSecao.verso, linhas: List.from(linhasAtual)));
+    }
+
     return secoes;
   }
 }

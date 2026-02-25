@@ -11,10 +11,6 @@ import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
 enum ModoCifra { nativa, web }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Widget
-// ─────────────────────────────────────────────────────────────────────────────
-
 class MusicaDetalhesPage extends StatefulWidget {
   final Musica musica;
 
@@ -23,10 +19,6 @@ class MusicaDetalhesPage extends StatefulWidget {
   @override
   State<MusicaDetalhesPage> createState() => _MusicaDetalhesPageState();
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// State
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTickerProviderStateMixin {
   // ── Controllers ────────────────────────────────────────────────────────────
@@ -51,12 +43,7 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
   CifraScrollConfig _scrollConfig = const CifraScrollConfig();
   bool _autoScrollAtivo = false;
 
-  // ── Modo de exibição da cifra ──────────────────────────────────────────────
   late ModoCifra _modoCifra;
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Lifecycle
-  // ─────────────────────────────────────────────────────────────────────────
 
   @override
   void initState() {
@@ -74,10 +61,6 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
     _scrollController.dispose();
     super.dispose();
   }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Inicialização
-  // ─────────────────────────────────────────────────────────────────────────
 
   void _initFlags() {
     _hasYoutube = widget.musica.linkYoutube != null && widget.musica.linkYoutube!.isNotEmpty;
