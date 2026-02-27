@@ -14,6 +14,10 @@ class EscalasProvider extends ChangeNotifier {
   // Rascunhos locais por evento — nunca enviados ao backend até publicar
   final Map<int, List<Escala>> _rascunhosPorEvento = {};
 
+  // Contador regressivo para IDs temporários de rascunho
+  // IDs negativos = rascunhos locais; IDs positivos = registros do backend
+  int _proximoIdRascunho = -1;
+
   final String apiUrl = AppConstants.escalasEndpoint;
 
   List<Escala> get escalas => _escalas;
@@ -24,24 +28,16 @@ class EscalasProvider extends ChangeNotifier {
 
   List<Escala> getRascunhos(int eventoId) => _rascunhosPorEvento[eventoId] ?? [];
 
-  /// NOVO: lista todos os rascunhos (de todos os eventos), útil para organizar na UI.
+  /// Lista todos os rascunhos de todos os eventos (útil para badges na UI).
   List<Escala> listarRascunhos() => _rascunhosPorEvento.values.expand((e) => e).toList();
 
+  /// Retorna total de rascunhos pendentes (útil para badge no AppBar).
+  int get totalRascunhosPendentes => listarRascunhos().length;
+
+  // ✅ CORRIGIDO: removido 'instrumentoNoEvento', usa copyWith + _proximoIdRascunho
   void adicionarRascunho(Escala escala) {
-    final lista = _rascunhosPorEvento[escala.eventoId] ?? [];
-    // Usa ID temporário negativo para diferenciar do backend
-    final tempId = -(lista.length + 1);
-    lista.add(Escala(
-      id: tempId,
-      musicoId: escala.musicoId,
-      eventoId: escala.eventoId,
-      musicoNome: escala.musicoNome,
-      instrumentoNoEvento: escala.instrumentoNoEvento,
-      instrumentoNome: escala.instrumentoNome,
-      observacao: escala.observacao,
-      eventoNome: escala.eventoNome,
-    ));
-    _rascunhosPorEvento[escala.eventoId] = lista;
+    final lista = _rascunhosPorEvento.putIfAbsent(escala.eventoId, () => []);
+    lista.add(escala.copyWith(id: _proximoIdRascunho--));
     notifyListeners();
   }
 
@@ -50,8 +46,16 @@ class EscalasProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Limpa todos os rascunhos de um evento sem publicar (ex: cancelar edição).
+  void descartarRascunhos(int eventoId) {
+    _rascunhosPorEvento.remove(eventoId);
+    notifyListeners();
+  }
+
   Future<bool> publicarEscalas(int eventoId) async {
-    final rascunhos = _rascunhosPorEvento[eventoId] ?? [];
+    final rascunhos = List<Escala>.from(
+      _rascunhosPorEvento[eventoId] ?? [],
+    );
     if (rascunhos.isEmpty) return false;
 
     _isLoading = true;
@@ -67,7 +71,7 @@ class EscalasProvider extends ChangeNotifier {
           throw _exceptionFromStatus(response.statusCode, 'Falha ao publicar escala');
         }
       }
-      _rascunhosPorEvento.remove(eventoId); // limpa rascunhos após publicar
+      _rascunhosPorEvento.remove(eventoId); // limpa após publicar com sucesso
       return true;
     } catch (e) {
       _errorMessage = ErrorHandler.handle(e).message;
@@ -97,8 +101,7 @@ class EscalasProvider extends ChangeNotifier {
         throw _exceptionFromStatus(response.statusCode, 'Erro ao listar escalas');
       }
     } catch (e) {
-      final appException = ErrorHandler.handle(e);
-      _errorMessage = appException.message;
+      _errorMessage = ErrorHandler.handle(e).message;
       AppLogger.error('listarEscalas', e);
     } finally {
       _isLoading = false;
@@ -124,8 +127,7 @@ class EscalasProvider extends ChangeNotifier {
         throw _exceptionFromStatus(response.statusCode, 'Falha ao criar escala');
       }
     } catch (e) {
-      final appException = ErrorHandler.handle(e);
-      _errorMessage = appException.message;
+      _errorMessage = ErrorHandler.handle(e).message;
       AppLogger.error('adicionarEscala', e);
       return false;
     } finally {
@@ -154,8 +156,7 @@ class EscalasProvider extends ChangeNotifier {
         throw _exceptionFromStatus(response.statusCode, 'Falha ao atualizar escala');
       }
     } catch (e) {
-      final appException = ErrorHandler.handle(e);
-      _errorMessage = appException.message;
+      _errorMessage = ErrorHandler.handle(e).message;
       AppLogger.error('atualizarEscala $id', e);
       return false;
     } finally {
@@ -181,8 +182,7 @@ class EscalasProvider extends ChangeNotifier {
         throw _exceptionFromStatus(response.statusCode, 'Falha ao deletar escala');
       }
     } catch (e) {
-      final appException = ErrorHandler.handle(e);
-      _errorMessage = appException.message;
+      _errorMessage = ErrorHandler.handle(e).message;
       AppLogger.error('deletarEscala $id', e);
       return false;
     } finally {
@@ -204,8 +204,7 @@ class EscalasProvider extends ChangeNotifier {
         throw _exceptionFromStatus(response.statusCode, 'Erro ao buscar escalas do evento');
       }
     } catch (e) {
-      final appException = ErrorHandler.handle(e);
-      _errorMessage = appException.message;
+      _errorMessage = ErrorHandler.handle(e).message;
       AppLogger.error('buscarEscalasPorEvento $eventoId', e);
       return [];
     }
@@ -224,13 +223,14 @@ class EscalasProvider extends ChangeNotifier {
         throw _exceptionFromStatus(response.statusCode, 'Erro ao buscar escalas do músico');
       }
     } catch (e) {
-      final appException = ErrorHandler.handle(e);
-      _errorMessage = appException.message;
+      _errorMessage = ErrorHandler.handle(e).message;
       AppLogger.error('buscarEscalasPorMusico $musicoId', e);
       return [];
     }
   }
 
+  // ✅ CORRIGIDO: substituído reconstrução manual (com instrumentoNoEvento)
+  // por Escala.fromJson (se backend retornar objeto) ou copyWith (fallback)
   Future<bool> confirmarPresenca(int escalaId, bool confirmado) async {
     _isLoading = true;
     _errorMessage = null;
@@ -246,19 +246,12 @@ class EscalasProvider extends ChangeNotifier {
       if (response.statusCode! >= 200 && response.statusCode! <= 299) {
         final index = _escalas.indexWhere((e) => e.id == escalaId);
         if (index != -1) {
-          final escalaAtual = _escalas[index];
-          _escalas[index] = Escala(
-            id: escalaAtual.id,
-            musicoNome: escalaAtual.musicoNome,
-            musicoId: escalaAtual.musicoId,
-            eventoNome: escalaAtual.eventoNome,
-            instrumentoNoEvento: escalaAtual.instrumentoNoEvento,
-            confirmado: confirmado,
-            criadoEm: escalaAtual.criadoEm,
-            eventoId: escalaAtual.eventoId,
-            instrumentoNome: escalaAtual.instrumentoNome,
-            observacao: escalaAtual.observacao,
-          );
+          // Prefere recarregar do backend para garantir consistência;
+          // usa copyWith como fallback seguro se o endpoint não retornar body
+          _escalas[index] = (response.data != null && response.data is Map<String, dynamic>)
+              ? Escala.fromJson(response.data as Map<String, dynamic>)
+              : _escalas[index].copyWith(confirmado: confirmado);
+
           AppLogger.info('Presença ${confirmado ? "confirmada" : "desconfirmada"} na escala $escalaId');
         }
         return true;
@@ -266,8 +259,7 @@ class EscalasProvider extends ChangeNotifier {
         throw _exceptionFromStatus(response.statusCode, 'Erro ao confirmar presença');
       }
     } catch (e) {
-      final appException = ErrorHandler.handle(e);
-      _errorMessage = appException.message;
+      _errorMessage = ErrorHandler.handle(e).message;
       AppLogger.error('confirmarPresenca $escalaId', e);
       return false;
     } finally {

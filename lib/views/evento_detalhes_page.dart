@@ -3,7 +3,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sggm/controllers/auth_controller.dart';
-import 'package:sggm/models/instrumentos.dart';
 import 'package:sggm/util/app_logger.dart';
 import 'package:sggm/views/escalas_page.dart';
 import 'package:sggm/views/musica_detalhes_page.dart';
@@ -16,8 +15,10 @@ import 'package:sggm/controllers/musicas_controller.dart';
 import 'package:sggm/controllers/musicos_controller.dart';
 import 'package:sggm/models/escalas.dart';
 import 'package:sggm/models/eventos.dart';
-
 import 'package:sggm/views/comentarios_page.dart';
+
+// ✅ REMOVIDO: import de Instrumento — _obterNomeInstrumento() foi eliminado
+// pois escala.instrumentoNome já vem formatado do backend
 
 class EventoDetalhesPage extends StatefulWidget {
   final Evento evento;
@@ -36,7 +37,6 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _carregarDados();
     });
@@ -64,32 +64,17 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  // ✅ Função auxiliar para obter nome do instrumento
-  String _obterNomeInstrumento(int? instrumentoId) {
-    if (instrumentoId == null) return 'Não especificado';
-
-    try {
-      final instProvider = Provider.of<InstrumentosProvider>(context, listen: false);
-      final instrumento = instProvider.instrumentos.firstWhere(
-        (i) => i.id == instrumentoId,
-        orElse: () => Instrumento(id: 0, nome: 'Desconhecido'),
-      );
-      return instrumento.nome;
-    } catch (e) {
-      return 'Desconhecido';
-    }
-  }
+  // ✅ REMOVIDO: _obterNomeInstrumento(int? instrumentoId)
+  // Motivo: campo instrumentoNome já vem do backend como String formatada
+  // Ex: "Violão • Vocalista • Teclado" — não é mais necessário fazer lookup local
 
   bool get _eventoJaAconteceu {
     try {
-      final data = DateTime.parse(widget.evento.dataEvento);
-      return data.isBefore(DateTime.now());
+      return DateTime.parse(widget.evento.dataEvento).isBefore(DateTime.now());
     } catch (_) {
       return false;
     }
@@ -112,25 +97,20 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
     // ── CABEÇALHO ──────────────────────────────────────────
     sb.writeln('*${eventoAtual.nome.toUpperCase()}*');
 
-    // Tipo do evento (CULTO, CASAMENTO, etc.)
     if (eventoAtual.tipo.isNotEmpty) {
       sb.writeln('🎵 Tipo: ${eventoAtual.tipo}');
     }
 
-    // Data do evento
-    String dataFormatada = eventoAtual.dataEvento.split('T')[0].split('-').reversed.join('/');
+    final dataFormatada = eventoAtual.dataEvento.split('T')[0].split('-').reversed.join('/');
     sb.writeln('🗓 Data: $dataFormatada');
 
-    // Horário do evento (se disponível na string ISO)
-    final temHorario = eventoAtual.dataEvento.contains('T');
-    if (temHorario) {
+    if (eventoAtual.dataEvento.contains('T')) {
       final horario = eventoAtual.dataEvento.split('T')[1].substring(0, 5);
       sb.writeln('🕐 Horário: $horario');
     }
 
     sb.writeln('📍 Local: ${eventoAtual.local}');
 
-    // Descrição/observação do evento
     if (eventoAtual.descricao != null && eventoAtual.descricao!.trim().isNotEmpty) {
       sb.writeln('📝 ${eventoAtual.descricao}');
     }
@@ -156,21 +136,22 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
       final confirmados = escalasDoEvento.where((e) => e.confirmado).toList();
       final pendentes = escalasDoEvento.where((e) => !e.confirmado).toList();
 
-      for (var escala in confirmados) {
-        final instrumentoNome = _obterNomeInstrumento(escala.instrumentoNoEvento);
-        sb.writeln('✅ ${escala.musicoNome ?? "Músico"} ($instrumentoNome)');
+      // ✅ CORRIGIDO: substituído _obterNomeInstrumento(escala.instrumentoNoEvento)
+      // por escala.instrumentoNome — já vem formatado do backend
+      for (final escala in confirmados) {
+        final instrumento = escala.instrumentoNome ?? 'Não especificado';
+        sb.writeln('✅ ${escala.musicoNome ?? "Músico"} ($instrumento)');
       }
-      for (var escala in pendentes) {
-        final instrumentoNome = _obterNomeInstrumento(escala.instrumentoNoEvento);
-        sb.writeln('⏳ ${escala.musicoNome ?? "Músico"} ($instrumentoNome)');
+      for (final escala in pendentes) {
+        final instrumento = escala.instrumentoNome ?? 'Não especificado';
+        sb.writeln('⏳ ${escala.musicoNome ?? "Músico"} ($instrumento)');
       }
 
-      // Observações individuais
       final comObservacao = escalasDoEvento.where((e) => e.observacao != null && e.observacao!.trim().isNotEmpty);
       if (comObservacao.isNotEmpty) {
         sb.writeln('');
         sb.writeln('_Obs:_');
-        for (var escala in comObservacao) {
+        for (final escala in comObservacao) {
           sb.writeln('• ${escala.musicoNome ?? "Músico"}: ${escala.observacao}');
         }
       }
@@ -184,9 +165,7 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
     } else {
       for (var i = 0; i < musicas.length; i++) {
         final m = musicas[i];
-        final tom = m.tom ?? '?';
-        sb.writeln('${i + 1}. *${m.titulo}* - ${m.artistaNome} [Tom: $tom]');
-
+        sb.writeln('${i + 1}. *${m.titulo}* - ${m.artistaNome} [Tom: ${m.tom ?? "?"}]');
         if (m.linkYoutube != null && m.linkYoutube!.isNotEmpty) {
           sb.writeln('   🎬 ${m.linkYoutube}');
         }
@@ -200,10 +179,9 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
     return sb.toString();
   }
 
-  // --- AÇÃO 1: Enviar para o GRUPO (Geral) ---
   Future<void> _enviarParaGrupoWhatsApp() async {
-    String texto = _gerarTextoEscala();
-    final Uri url = Uri.parse("https://wa.me/?text=${Uri.encodeComponent(texto)}");
+    final texto = _gerarTextoEscala();
+    final url = Uri.parse("https://wa.me/?text=${Uri.encodeComponent(texto)}");
 
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
       if (mounted) {
@@ -214,30 +192,27 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
     }
   }
 
-  // --- AÇÃO 2: Enviar para UM MÚSICO (Individual) ---
   Future<void> _notificarMusico(Escala escala) async {
     final musicosProvider = Provider.of<MusicosProvider>(context, listen: false);
 
     try {
-      final musico = musicosProvider.musicos.firstWhere(
-        (m) => m.id == escala.musicoId,
-      );
+      final musico = musicosProvider.musicos.firstWhere((m) => m.id == escala.musicoId);
 
       String telefone = musico.telefone.replaceAll(RegExp(r'[^0-9]'), '');
-      if (telefone.length <= 11) {
-        telefone = "55$telefone";
-      }
+      if (telefone.length <= 11) telefone = "55$telefone";
 
-      final evento = widget.evento;
-      String dataFormatada = evento.dataEvento.split('T')[0].split('-').reversed.join('/');
+      final dataFormatada = widget.evento.dataEvento.split('T')[0].split('-').reversed.join('/');
 
-      final instrumentoNome = _obterNomeInstrumento(escala.instrumentoNoEvento);
+      // ✅ CORRIGIDO: substituído _obterNomeInstrumento(escala.instrumentoNoEvento)
+      // por escala.instrumentoNome — campo computado do backend
+      final instrumento = escala.instrumentoNome ?? 'instrumento não especificado';
 
-      String mensagem = "Olá *${musico.nome}*! 👋\n"
-          "Você foi escalado para o *${evento.nome}* dia $dataFormatada tocando *$instrumentoNome*.\n\n"
+      final mensagem = "Olá *${musico.nome}*! 👋\n"
+          "Você foi escalado para o *${widget.evento.nome}* dia $dataFormatada "
+          "tocando *$instrumento*.\n\n"
           "Confirme sua presença!";
 
-      final Uri url = Uri.parse("https://wa.me/$telefone?text=${Uri.encodeComponent(mensagem)}");
+      final url = Uri.parse("https://wa.me/$telefone?text=${Uri.encodeComponent(mensagem)}");
 
       if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
         if (mounted) {
@@ -249,9 +224,7 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
     } catch (e) {
       AppLogger.error('❌ Erro ao notificar músico: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro: $e')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e')));
       }
     }
   }
@@ -285,11 +258,9 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
                     final musicasFiltradas = termoBusca.isEmpty
                         ? provider.musicas
                         : provider.musicas
-                            .where(
-                              (m) =>
-                                  m.titulo.toLowerCase().contains(termoBusca.toLowerCase()) ||
-                                  m.artistaNome.toLowerCase().contains(termoBusca.toLowerCase()),
-                            )
+                            .where((m) =>
+                                m.titulo.toLowerCase().contains(termoBusca.toLowerCase()) ||
+                                m.artistaNome.toLowerCase().contains(termoBusca.toLowerCase()))
                             .toList();
 
                     return Column(
@@ -313,13 +284,8 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
                                       },
                                     )
                                   : null,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 8,
-                              ),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                             ),
                             onChanged: (v) => setStateDialog(() => termoBusca = v),
                           ),
@@ -372,13 +338,9 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
 
                                     return CheckboxListTile(
                                       dense: true,
-                                      contentPadding: const EdgeInsets.symmetric(
-                                        horizontal: 16,
-                                        vertical: 0,
-                                      ),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
                                       value: selecionado,
                                       activeColor: Colors.teal,
-                                      // Nome + artista na mesma linha
                                       title: RichText(
                                         overflow: TextOverflow.ellipsis,
                                         text: TextSpan(
@@ -454,6 +416,131 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
     );
   }
 
+  // ✅ NOVO: diálogo de adicionar músico na escala com multi-seleção M2M
+  void _adicionarMusicoNaEscala(BuildContext context) {
+    int? selectedMusicoId;
+    final List<int> selectedInstrumentosIds = [];
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: const Text('Adicionar à Escala'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Seleção de músico ──────────────────────────────
+                  Consumer<MusicosProvider>(
+                    builder: (context, musicosProvider, _) {
+                      return DropdownButtonFormField<int>(
+                        value: selectedMusicoId,
+                        decoration: const InputDecoration(labelText: 'Músico'),
+                        items: musicosProvider.musicos
+                            .map((m) => DropdownMenuItem(
+                                  value: m.id,
+                                  child: Text(m.nome),
+                                ))
+                            .toList(),
+                        onChanged: (v) => setDialogState(() => selectedMusicoId = v),
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // ── Multi-seleção de instrumentos (M2M) ───────────
+                  const Text(
+                    'Instrumentos',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  Consumer<InstrumentosProvider>(
+                    builder: (context, instrumentosProvider, _) {
+                      if (instrumentosProvider.instrumentos.isEmpty) {
+                        return const Text(
+                          'Nenhum instrumento cadastrado',
+                          style: TextStyle(color: Colors.grey),
+                        );
+                      }
+                      return Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: instrumentosProvider.instrumentos.map((inst) {
+                          final selecionado = selectedInstrumentosIds.contains(inst.id);
+                          return FilterChip(
+                            label: Text(inst.nome),
+                            selected: selecionado,
+                            onSelected: (v) => setDialogState(() {
+                              if (v) {
+                                selectedInstrumentosIds.add(inst.id);
+                              } else {
+                                selectedInstrumentosIds.remove(inst.id);
+                              }
+                            }),
+                          );
+                        }).toList(),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  if (selectedMusicoId == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Selecione um músico')),
+                    );
+                    return;
+                  }
+                  if (selectedInstrumentosIds.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Selecione ao menos um instrumento')),
+                    );
+                    return;
+                  }
+
+                  // Monta o nome do músico para exibição local no rascunho
+                  final musicosProvider = Provider.of<MusicosProvider>(context, listen: false);
+                  final musico = musicosProvider.musicos.firstWhere((m) => m.id == selectedMusicoId);
+
+                  final nova = Escala(
+                    musicoId: selectedMusicoId!,
+                    eventoId: widget.evento.id!,
+                    musicoNome: musico.nome,
+                    eventoNome: widget.evento.nome,
+                    instrumentos: List<int>.from(selectedInstrumentosIds),
+                  );
+
+                  if (context.mounted) Navigator.pop(ctx);
+
+                  // Adiciona como rascunho — só vai ao backend ao publicar
+                  Provider.of<EscalasProvider>(context, listen: false).adicionarRascunho(nova);
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Músico adicionado ao rascunho. Publique para salvar.'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                },
+                child: const Text('Adicionar'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -463,7 +550,6 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
       );
     }
 
-    // ✅ NOVO: Obter permissão do usuário
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final isLider = auth.userData?['is_lider'] ?? false;
 
@@ -479,7 +565,6 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
           ],
         ),
         actions: [
-          // ✅ Só líder/admin pode enviar para grupo
           if (isLider)
             IconButton(
               icon: const Icon(Icons.send),
@@ -513,9 +598,7 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
                 children: [
                   Expanded(
                     child: musicas.isEmpty
-                        ? const Center(
-                            child: Text('Nenhuma música selecionada'),
-                          )
+                        ? const Center(child: Text('Nenhuma música selecionada'))
                         : ListView.builder(
                             padding: const EdgeInsets.all(8),
                             itemCount: musicas.length,
@@ -534,10 +617,7 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
                                       ),
                                     ),
                                   ),
-                                  title: Text(
-                                    musica.titulo,
-                                    style: const TextStyle(fontWeight: FontWeight.bold),
-                                  ),
+                                  title: Text(musica.titulo, style: const TextStyle(fontWeight: FontWeight.bold)),
                                   subtitle: Text(musica.artistaNome),
                                   trailing: Row(
                                     mainAxisSize: MainAxisSize.min,
@@ -569,27 +649,23 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
                                                   ),
                                                 );
                                               }
-                                            : null, // ← null desabilita o botão automaticamente no Flutter
+                                            : null,
                                       ),
                                       const SizedBox(width: 4),
                                       const Icon(Icons.arrow_forward_ios, size: 16),
                                     ],
                                   ),
-                                  onTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => MusicaDetalhesPage(musica: musica),
-                                      ),
-                                    );
-                                  },
+                                  onTap: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => MusicaDetalhesPage(musica: musica),
+                                    ),
+                                  ),
                                 ),
                               );
                             },
                           ),
                   ),
-
-                  // ✅ BOTÃO "GERENCIAR MÚSICAS" - Só para líder/admin
                   if (isLider)
                     Container(
                       width: double.infinity,
@@ -600,7 +676,7 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
                         onPressed: () => _mostrarSelecaoMusicas(context, eventoAtual),
                       ),
                     ),
-                  const Padding(padding: EdgeInsets.only(bottom: 16))
+                  const Padding(padding: EdgeInsets.only(bottom: 16)),
                 ],
               );
             },
@@ -609,71 +685,138 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
           // ========== ABA ESCALA ==========
           Consumer<EscalasProvider>(
             builder: (context, provider, child) {
-              final escalaDoCulto = provider.escalas.where((e) => e.eventoId == widget.evento.id).toList();
+              final escalasConfirmadas = provider.escalas.where((e) => e.eventoId == widget.evento.id).toList();
+
+              // ✅ Rascunhos locais do evento atual (ainda não publicados)
+              final rascunhos = provider.getRascunhos(widget.evento.id!);
+              final todasEscalas = [...escalasConfirmadas, ...rascunhos];
 
               return Stack(
                 children: [
-                  if (escalaDoCulto.isEmpty)
+                  if (todasEscalas.isEmpty)
                     const Center(child: Text('Ninguém escalado ainda.'))
                   else
                     ListView.builder(
                       padding: EdgeInsets.only(
-                        bottom: isLider ? 80 : 8, // ✅ Espaço menor se não houver botão
+                        bottom: isLider ? 80 : 8,
                         top: 8,
                         left: 8,
                         right: 8,
                       ),
-                      itemCount: escalaDoCulto.length,
+                      itemCount: todasEscalas.length,
                       itemBuilder: (context, index) {
-                        final item = escalaDoCulto[index];
-                        final instrumentoNome = _obterNomeInstrumento(item.instrumentoNoEvento);
+                        final item = todasEscalas[index];
+                        final isRascunho = (item.id ?? 0) < 0;
 
                         return Card(
                           elevation: 2,
+                          // ✅ Borda laranja sinaliza rascunho não publicado
+                          shape: isRascunho
+                              ? RoundedRectangleBorder(
+                                  side: const BorderSide(color: Colors.orange, width: 1.5),
+                                  borderRadius: BorderRadius.circular(8),
+                                )
+                              : null,
                           child: ListTile(
-                            leading: const CircleAvatar(
-                              backgroundColor: Colors.orangeAccent,
-                              child: Icon(Icons.person, color: Colors.white),
+                            leading: CircleAvatar(
+                              backgroundColor: isRascunho ? Colors.orange : Colors.orangeAccent,
+                              child: Icon(
+                                isRascunho ? Icons.edit_outlined : Icons.person,
+                                color: Colors.white,
+                              ),
                             ),
                             title: Text(
                               item.musicoNome ?? 'Músico',
                               style: const TextStyle(fontWeight: FontWeight.bold),
                             ),
-                            subtitle: Text('Toca: $instrumentoNome'),
-
-                            // ✅ Ações visíveis SÓ para líder/admin
+                            // ✅ CORRIGIDO: usa item.instrumentoNome diretamente
+                            subtitle: Text(
+                              isRascunho
+                                  ? '🕓 Rascunho — ${item.instrumentoNome ?? "instrumento não definido"}'
+                                  : 'Toca: ${item.instrumentoNome ?? "Não especificado"}',
+                            ),
                             trailing: isLider
                                 ? Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      IconButton(
-                                        icon: const Icon(Icons.send_to_mobile, color: Colors.green),
-                                        tooltip: 'Avisar no WhatsApp',
-                                        onPressed: () => _notificarMusico(item),
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.delete_outline, color: Colors.red),
-                                        onPressed: () async {
-                                          final confirmed = await ConfirmDeleteDialog.show(
-                                            context,
-                                            entityName: item.musicoNome ?? 'Músico',
-                                            message:
-                                                'Deseja remover ${item.musicoNome ?? "este músico"} da escala?\nEsta ação não pode ser desfeita.',
-                                          );
-                                          if (confirmed && context.mounted && item.id != null) {
-                                            provider.deletarEscala(item.id!);
-                                          }
-                                        },
-                                      ),
+                                      // Rascunho: apenas remover
+                                      if (isRascunho)
+                                        IconButton(
+                                          icon: const Icon(Icons.delete_outline, color: Colors.orange),
+                                          tooltip: 'Remover rascunho',
+                                          onPressed: () => provider.removerRascunho(widget.evento.id!, item.id!),
+                                        )
+                                      // Publicado: notificar + deletar
+                                      else ...[
+                                        IconButton(
+                                          icon: const Icon(Icons.send_to_mobile, color: Colors.green),
+                                          tooltip: 'Avisar no WhatsApp',
+                                          onPressed: () => _notificarMusico(item),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                          onPressed: () async {
+                                            final confirmed = await ConfirmDeleteDialog.show(
+                                              context,
+                                              entityName: item.musicoNome ?? 'Músico',
+                                              message:
+                                                  'Deseja remover ${item.musicoNome ?? "este músico"} da escala?\nEsta ação não pode ser desfeita.',
+                                            );
+                                            if (confirmed && context.mounted && item.id != null) {
+                                              provider.deletarEscala(item.id!);
+                                            }
+                                          },
+                                        ),
+                                      ],
                                     ],
                                   )
-                                : null, // ✅ Músico comum não vê botões
+                                : null,
                           ),
                         );
                       },
                     ),
 
-                  // ✅ BOTÃO "ESCALAR" - Só para líder/admin
+                  // ✅ Banner "Publicar X rascunhos" acima do FAB
+                  if (isLider && rascunhos.isNotEmpty)
+                    Positioned(
+                      bottom: 80,
+                      left: 16,
+                      right: 16,
+                      child: Card(
+                        color: Colors.orange[50],
+                        elevation: 4,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.info_outline, color: Colors.orange),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '${rascunhos.length} rascunho(s) não publicado(s)',
+                                  style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () async {
+                                  final ok = await provider.publicarEscalas(widget.evento.id!);
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                      content: Text(
+                                          ok ? 'Escalas publicadas!' : provider.errorMessage ?? 'Erro ao publicar'),
+                                      backgroundColor: ok ? Colors.green : Colors.red,
+                                    ));
+                                  }
+                                },
+                                child: const Text('PUBLICAR', style: TextStyle(color: Colors.orange)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                  // ✅ FAB "Escalar" abre diálogo M2M inline (não navega mais)
                   if (isLider)
                     Positioned(
                       bottom: 16,

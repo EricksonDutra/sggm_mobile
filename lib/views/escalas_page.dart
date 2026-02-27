@@ -9,7 +9,7 @@ import 'package:sggm/controllers/instrumentos_controller.dart';
 import 'package:sggm/controllers/musicos_controller.dart';
 import 'package:sggm/models/escalas.dart';
 import 'package:sggm/models/eventos.dart';
-import 'package:sggm/models/instrumentos.dart';
+// ✅ REMOVIDO: import de Instrumento — não é mais necessário após migração M2M
 import 'package:sggm/views/widgets/dialogs/confirm_delete_dialog.dart';
 import 'package:sggm/views/widgets/loading/shimmer_card.dart';
 
@@ -43,8 +43,6 @@ class EscalasPage extends StatefulWidget {
 class _EscalasPageState extends State<EscalasPage> {
   String _filtro = 'todas';
   final _filtroAvancado = _EscalaFiltro();
-
-  // Mantido como variável de instância para ser acessível no AppBar
   Map<int, Evento> _eventosMap = {};
 
   @override
@@ -98,8 +96,6 @@ class _EscalasPageState extends State<EscalasPage> {
   String _formatarHora(DateTime dt) => '${dt.hour.toString().padLeft(2, '0')}:'
       '${dt.minute.toString().padLeft(2, '0')}';
 
-  /// Evento considerado passado 3h após início.
-  /// Sem hora definida: passado às 03:00 do dia seguinte.
   bool _eventoEhPassado(DateTime dataEvento) {
     final temHorario = dataEvento.hour != 0 || dataEvento.minute != 0;
     final corte = temHorario
@@ -138,8 +134,12 @@ class _EscalasPageState extends State<EscalasPage> {
           !(e.musicoNome ?? '').toLowerCase().contains(_filtroAvancado.musicoNome!.toLowerCase())) {
         return false;
       }
-      if (_filtroAvancado.instrumentoNome != null && e.instrumentoNome?.toString() != _filtroAvancado.instrumentoNome) {
-        return false;
+      // ✅ CORRIGIDO: instrumentoNome agora é multi-valor "Violão • Vocalista"
+      // Usa contains() em vez de == para filtrar corretamente
+      if (_filtroAvancado.instrumentoNome != null) {
+        final nomeEscala = (e.instrumentoNome ?? '').toLowerCase();
+        final filtro = _filtroAvancado.instrumentoNome!.toLowerCase();
+        if (!nomeEscala.contains(filtro)) return false;
       }
       return true;
     }).toList();
@@ -184,7 +184,6 @@ class _EscalasPageState extends State<EscalasPage> {
               child: ListView(
                 controller: scrollController,
                 children: [
-                  // Handle
                   Center(
                     child: Container(
                       width: 40,
@@ -196,15 +195,10 @@ class _EscalasPageState extends State<EscalasPage> {
                       ),
                     ),
                   ),
-
-                  // Cabeçalho
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'Filtros',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
+                      const Text('Filtros', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                       TextButton.icon(
                         onPressed: () {
                           setSheet(() => _filtroAvancado.limpar());
@@ -259,15 +253,11 @@ class _EscalasPageState extends State<EscalasPage> {
                   Consumer<MusicosProvider>(
                     builder: (context, provider, _) {
                       final nomes = provider.musicos.map((m) => m.nome).toList();
-
                       return Autocomplete<String>(
-                        initialValue: TextEditingValue(
-                          text: _filtroAvancado.musicoNome ?? '',
-                        ),
-                        optionsBuilder: (TextEditingValue textEditingValue) {
-                          if (textEditingValue.text.isEmpty) return nomes;
-                          return nomes
-                              .where((nome) => nome.toLowerCase().contains(textEditingValue.text.toLowerCase()));
+                        initialValue: TextEditingValue(text: _filtroAvancado.musicoNome ?? ''),
+                        optionsBuilder: (TextEditingValue v) {
+                          if (v.text.isEmpty) return nomes;
+                          return nomes.where((nome) => nome.toLowerCase().contains(v.text.toLowerCase()));
                         },
                         onSelected: (valor) => setSheet(() => _filtroAvancado.musicoNome = valor),
                         fieldViewBuilder: (context, controller, focusNode, onSubmitted) {
@@ -289,7 +279,9 @@ class _EscalasPageState extends State<EscalasPage> {
                                   : const Icon(Icons.search, size: 18),
                             ),
                             onChanged: (v) {
-                              if (v.isEmpty) setSheet(() => _filtroAvancado.musicoNome = null);
+                              if (v.isEmpty) {
+                                setSheet(() => _filtroAvancado.musicoNome = null);
+                              }
                             },
                           );
                         },
@@ -326,6 +318,12 @@ class _EscalasPageState extends State<EscalasPage> {
 
                   // ── Instrumento ──────────────────────────────────────────
                   const Text('Instrumento', style: TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  // ✅ Hint de que o filtro faz busca parcial (M2M)
+                  Text(
+                    'Selecione para filtrar escalas que contenham este instrumento',
+                    style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                  ),
                   const SizedBox(height: 10),
                   Consumer<InstrumentosProvider>(
                     builder: (context, provider, _) {
@@ -338,19 +336,19 @@ class _EscalasPageState extends State<EscalasPage> {
                             selected: _filtroAvancado.instrumentoNome == null,
                             onSelected: (_) => setSheet(() => _filtroAvancado.instrumentoNome = null),
                           ),
-                          ...provider.instrumentos.map((inst) => ChoiceChip(
-                                label: Text(inst.nome),
-                                selected: _filtroAvancado.instrumentoNome == inst.nome,
-                                onSelected: (v) =>
-                                    setSheet(() => _filtroAvancado.instrumentoNome = v ? inst.nome : null),
-                              )),
+                          ...provider.instrumentos.map(
+                            (inst) => ChoiceChip(
+                              label: Text(inst.nome),
+                              selected: _filtroAvancado.instrumentoNome == inst.nome,
+                              onSelected: (v) => setSheet(() => _filtroAvancado.instrumentoNome = v ? inst.nome : null),
+                            ),
+                          ),
                         ],
                       );
                     },
                   ),
                   const SizedBox(height: 28),
 
-                  // ── Botão aplicar ────────────────────────────────────────
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
@@ -481,15 +479,14 @@ class _EscalasPageState extends State<EscalasPage> {
 
   void _mostrarDialogoAdicionar(BuildContext context) {
     final obsController = TextEditingController();
-    final outroInstrumentoController = TextEditingController();
 
     int? selectedMusicoId;
     String? selectedMusicoNome;
     int? selectedEventoId;
     String? selectedEventoNome;
-    String? selectedInstrumento;
-    String? selectedInstrumentoNome;
-    bool mostrarCampoOutro = false;
+
+    // ✅ CORRIGIDO: M2M — lista de IDs em vez de ID único + nome livre
+    final List<int> selectedInstrumentosIds = [];
 
     showDialog(
       context: context,
@@ -510,7 +507,7 @@ class _EscalasPageState extends State<EscalasPage> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Músico
+                    // ── Músico ────────────────────────────────────────────
                     Consumer<MusicosProvider>(
                       builder: (context, provider, child) {
                         return DropdownButtonFormField<int>(
@@ -520,7 +517,7 @@ class _EscalasPageState extends State<EscalasPage> {
                             contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           ),
                           isExpanded: true,
-                          initialValue: selectedMusicoId,
+                          value: selectedMusicoId,
                           items: provider.musicos
                               .map((musico) => DropdownMenuItem<int>(
                                     value: musico.id,
@@ -533,20 +530,15 @@ class _EscalasPageState extends State<EscalasPage> {
                               if (valor != null) {
                                 final musico = provider.musicos.firstWhere((m) => m.id == valor);
                                 selectedMusicoNome = musico.nome;
+
+                                // ✅ Pré-seleciona instrumento principal do músico
+                                // se ele tiver e existir na lista de instrumentos
                                 final instProvider = Provider.of<InstrumentosProvider>(context, listen: false);
-                                if (musico.instrumentoPrincipal != null &&
-                                    musico.instrumentoPrincipal.toString().isNotEmpty) {
-                                  final existeNaLista = instProvider.instrumentos
-                                      .any((i) => i.nome == musico.instrumentoPrincipal.toString());
-                                  if (existeNaLista) {
-                                    selectedInstrumento = musico.instrumentoPrincipal.toString();
-                                    selectedInstrumentoNome = selectedInstrumento;
-                                    mostrarCampoOutro = false;
-                                  } else {
-                                    selectedInstrumento = 'Outro';
-                                    mostrarCampoOutro = true;
-                                    outroInstrumentoController.text = musico.instrumentoPrincipal.toString();
-                                    selectedInstrumentoNome = outroInstrumentoController.text;
+                                final principal = musico.instrumentoPrincipal?.toString();
+                                if (principal != null && principal.isNotEmpty) {
+                                  final match = instProvider.instrumentos.where((i) => i.nome == principal).firstOrNull;
+                                  if (match?.id != null && !selectedInstrumentosIds.contains(match!.id)) {
+                                    selectedInstrumentosIds.add(match.id);
                                   }
                                 }
                               }
@@ -557,9 +549,34 @@ class _EscalasPageState extends State<EscalasPage> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Evento
+                    // ── Evento (somente futuros, pré-selecionado o mais próximo) ──
                     Consumer<EventoProvider>(
                       builder: (context, provider, child) {
+                        // ✅ Filtra apenas eventos futuros e ordena do mais próximo
+                        final agora = DateTime.now();
+                        final eventosFuturos = provider.eventos.where((e) {
+                          final dt = _parseDataEvento(e.dataEvento);
+                          return dt != null && !_eventoEhPassado(dt);
+                        }).toList()
+                          ..sort((a, b) {
+                            final da = _parseDataEvento(a.dataEvento);
+                            final db = _parseDataEvento(b.dataEvento);
+                            if (da == null) return 1;
+                            if (db == null) return -1;
+                            return da.compareTo(db);
+                          });
+
+                        // Pré-seleciona o evento mais próximo ao abrir o diálogo
+                        if (selectedEventoId == null && eventosFuturos.isNotEmpty) {
+                          // usa addPostFrameCallback para não chamar setState durante build
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            setStateDialog(() {
+                              selectedEventoId = eventosFuturos.first.id;
+                              selectedEventoNome = eventosFuturos.first.nome;
+                            });
+                          });
+                        }
+
                         return DropdownButtonFormField<int>(
                           decoration: const InputDecoration(
                             labelText: 'Evento *',
@@ -567,12 +584,12 @@ class _EscalasPageState extends State<EscalasPage> {
                             contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           ),
                           isExpanded: true,
-                          initialValue: selectedEventoId,
-                          items: provider.eventos
+                          value: selectedEventoId,
+                          items: eventosFuturos
                               .map((evento) => DropdownMenuItem<int>(
                                     value: evento.id,
                                     child: Text(
-                                      '${evento.nome} (${evento.dataEvento.split('T')[0]})',
+                                      '${evento.nome} (${evento.dataEvento.split('T')[0].split('-').reversed.join('/')})',
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ))
@@ -591,56 +608,45 @@ class _EscalasPageState extends State<EscalasPage> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Instrumento
+                    // ── Instrumentos (M2M via FilterChip) ─────────────────
+                    const Text(
+                      'Instrumentos *',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
                     Consumer<InstrumentosProvider>(
-                      builder: (context, provider, child) {
-                        final listaOpcoes = [
-                          ...provider.instrumentos.map((i) => i.nome),
-                          'Outro',
-                        ];
-                        return DropdownButtonFormField<String>(
-                          decoration: const InputDecoration(
-                            labelText: 'Instrumento *',
-                            border: OutlineInputBorder(),
-                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          ),
-                          isExpanded: true,
-                          initialValue: selectedInstrumento,
-                          items: listaOpcoes
-                              .map((nome) => DropdownMenuItem<String>(
-                                    value: nome,
-                                    child: Text(nome, overflow: TextOverflow.ellipsis),
-                                  ))
-                              .toList(),
-                          onChanged: (valor) {
-                            setStateDialog(() {
-                              selectedInstrumento = valor;
-                              mostrarCampoOutro = (valor == 'Outro');
-                              if (!mostrarCampoOutro) {
-                                outroInstrumentoController.clear();
-                                selectedInstrumentoNome = valor;
-                              }
-                            });
-                          },
+                      builder: (context, provider, _) {
+                        if (provider.instrumentos.isEmpty) {
+                          return const Text(
+                            'Nenhum instrumento cadastrado',
+                            style: TextStyle(color: Colors.grey),
+                          );
+                        }
+                        return Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
+                          children: provider.instrumentos.map((inst) {
+                            final selecionado = selectedInstrumentosIds.contains(inst.id);
+                            return FilterChip(
+                              label: Text(inst.nome),
+                              selected: selecionado,
+                              // ✅ FilterChip com setStateDialog para rebuild local
+                              onSelected: (v) => setStateDialog(() {
+                                if (v) {
+                                  selectedInstrumentosIds.add(inst.id);
+                                } else {
+                                  selectedInstrumentosIds.remove(inst.id);
+                                }
+                              }),
+                            );
+                          }).toList(),
                         );
                       },
                     ),
 
-                    if (mostrarCampoOutro) ...[
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: outroInstrumentoController,
-                        decoration: const InputDecoration(
-                          labelText: 'Qual instrumento?',
-                          hintText: 'Digite o nome',
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        ),
-                        onChanged: (v) => selectedInstrumentoNome = v,
-                      ),
-                    ],
-
                     const SizedBox(height: 16),
+
+                    // ── Observação ────────────────────────────────────────
                     TextField(
                       controller: obsController,
                       decoration: const InputDecoration(
@@ -652,6 +658,7 @@ class _EscalasPageState extends State<EscalasPage> {
                     ),
                     const SizedBox(height: 24),
 
+                    // ── Ações ─────────────────────────────────────────────
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
@@ -662,37 +669,37 @@ class _EscalasPageState extends State<EscalasPage> {
                         const SizedBox(width: 8),
                         ElevatedButton(
                           onPressed: () {
-                            if (selectedMusicoId == null || selectedEventoId == null || selectedInstrumento == null) {
+                            // Validações
+                            if (selectedMusicoId == null) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Preencha os campos obrigatórios!')),
+                                const SnackBar(content: Text('Selecione um músico!')),
                               );
                               return;
                             }
-                            if (selectedInstrumento == 'Outro' && outroInstrumentoController.text.isEmpty) {
+                            if (selectedEventoId == null) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Digite o instrumento!')),
+                                const SnackBar(content: Text('Selecione um evento!')),
+                              );
+                              return;
+                            }
+                            // ✅ CORRIGIDO: valida lista de IDs, não string única
+                            if (selectedInstrumentosIds.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Selecione ao menos um instrumento!')),
                               );
                               return;
                             }
 
-                            int? instrumentoIdFinal;
-                            if (selectedInstrumento != 'Outro') {
-                              final instProvider = Provider.of<InstrumentosProvider>(context, listen: false);
-                              final instrumento = instProvider.instrumentos.firstWhere(
-                                (i) => i.nome == selectedInstrumento,
-                                orElse: () => Instrumento(id: 0, nome: ''),
-                              );
-                              instrumentoIdFinal = instrumento.id;
-                            }
-
+                            // ✅ CORRIGIDO: Escala com instrumentos (List<int>)
+                            // Removido: instrumentoNoEvento (FK antiga)
+                            // Removido: instrumentoNome manual — backend computa
                             final novaEscala = Escala(
                               musicoId: selectedMusicoId!,
                               eventoId: selectedEventoId!,
                               musicoNome: selectedMusicoNome,
                               eventoNome: selectedEventoNome,
-                              instrumentoNoEvento: instrumentoIdFinal,
-                              instrumentoNome: selectedInstrumentoNome,
-                              observacao: obsController.text,
+                              instrumentos: List<int>.from(selectedInstrumentosIds),
+                              observacao: obsController.text.trim().isNotEmpty ? obsController.text.trim() : null,
                             );
 
                             Provider.of<EscalasProvider>(context, listen: false).adicionarRascunho(novaEscala);
@@ -753,8 +760,13 @@ class _EscalasPageState extends State<EscalasPage> {
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (escala.instrumentoNome != null && escala.instrumentoNome!.toString().isNotEmpty)
-                  Text('🎵 ${escala.instrumentoNome}'),
+                // ✅ Exibe instrumentoNome diretamente — já formatado pelo backend
+                // Para rascunhos locais, mostra os IDs selecionados como fallback
+                if (escala.instrumentoNome != null && escala.instrumentoNome!.isNotEmpty)
+                  Text('🎵 ${escala.instrumentoNome}')
+                else if (escala.instrumentos != null && escala.instrumentos!.isNotEmpty)
+                  // Fallback para rascunho local: backend ainda não processou
+                  Text('🎵 ${escala.instrumentos!.length} instrumento(s) selecionado(s)'),
                 if (escala.observacao != null && escala.observacao!.isNotEmpty) Text('📝 ${escala.observacao}'),
                 Text(
                   isRascunho ? 'Rascunho (não publicado)' : (escala.confirmado ? 'Confirmado' : 'Pendente'),
@@ -993,7 +1005,6 @@ class _EscalasPageState extends State<EscalasPage> {
           title: const Text('Minhas Escalas'),
           centerTitle: true,
           actions: [
-            // Ícone de filtro com badge quando ativo
             IconButton(
               tooltip: 'Filtrar',
               icon: Badge(
@@ -1030,7 +1041,6 @@ class _EscalasPageState extends State<EscalasPage> {
               );
             }
 
-            // Atualiza mapa de eventos para uso no AppBar (filtros)
             _eventosMap = {
               for (final ev in eventosProvider.eventos)
                 if (ev.id != null) ev.id!: ev,
@@ -1041,13 +1051,11 @@ class _EscalasPageState extends State<EscalasPage> {
               ...escalasProvider.escalas,
             ];
 
-            // Aplica filtros: status → avançado
             final filtradas = _aplicarFiltroAvancado(
               _filtrarPorStatus(todas),
               _eventosMap,
             );
 
-            // Separa por aba
             final proximas = <Escala>[];
             final passadas = <Escala>[];
 
@@ -1084,7 +1092,6 @@ class _EscalasPageState extends State<EscalasPage> {
 
             return Column(
               children: [
-                // Banner de filtro ativo
                 if (_filtroAvancado.ativo)
                   Container(
                     width: double.infinity,
@@ -1108,9 +1115,7 @@ class _EscalasPageState extends State<EscalasPage> {
                       ],
                     ),
                   ),
-
                 _buildFiltrosStatus(),
-
                 Expanded(
                   child: TabBarView(
                     children: [
@@ -1146,8 +1151,6 @@ class _EscalasPageState extends State<EscalasPage> {
       ),
     );
   }
-
-  // ── descrição textual do filtro ativo (para o banner) ─────────────────────
 
   String _descricaoFiltroAtivo() {
     final partes = <String>[];
