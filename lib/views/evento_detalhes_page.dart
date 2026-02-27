@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:sggm/controllers/auth_controller.dart';
 import 'package:sggm/models/instrumentos.dart';
 import 'package:sggm/util/app_logger.dart';
+import 'package:sggm/views/escalas_page.dart';
 import 'package:sggm/views/musica_detalhes_page.dart';
 import 'package:sggm/views/widgets/dialogs/confirm_delete_dialog.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -719,7 +720,8 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
                       bottom: 16,
                       right: 16,
                       child: FloatingActionButton.extended(
-                        onPressed: () => _adicionarMusicoNaEscala(context),
+                        onPressed: () =>
+                            Navigator.push(context, MaterialPageRoute(builder: (context) => const EscalasPage())),
                         icon: const Icon(Icons.person_add),
                         label: const Text('Escalar'),
                         backgroundColor: Colors.orangeAccent,
