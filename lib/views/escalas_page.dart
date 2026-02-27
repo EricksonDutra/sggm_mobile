@@ -22,6 +22,9 @@ class EscalasPage extends StatefulWidget {
 class _EscalasPageState extends State<EscalasPage> {
   String _filtro = 'todas';
 
+  // Evento selecionado no diálogo de adicionar — usado para controlar rascunhos
+  int? _eventoRascunhoAtivo;
+
   @override
   void initState() {
     super.initState();
@@ -84,8 +87,11 @@ class _EscalasPageState extends State<EscalasPage> {
     final outroInstrumentoController = TextEditingController();
 
     int? selectedMusicoId;
+    String? selectedMusicoNome;
     int? selectedEventoId;
+    String? selectedEventoNome;
     String? selectedInstrumento;
+    String? selectedInstrumentoNome;
     bool mostrarCampoOutro = false;
 
     showDialog(
@@ -127,6 +133,7 @@ class _EscalasPageState extends State<EscalasPage> {
                               selectedMusicoId = valor;
                               if (valor != null) {
                                 final musico = provider.musicos.firstWhere((m) => m.id == valor);
+                                selectedMusicoNome = musico.nome;
                                 final instProvider = Provider.of<InstrumentosProvider>(context, listen: false);
                                 if (musico.instrumentoPrincipal != null &&
                                     musico.instrumentoPrincipal.toString().isNotEmpty) {
@@ -134,11 +141,13 @@ class _EscalasPageState extends State<EscalasPage> {
                                       .any((i) => i.nome == musico.instrumentoPrincipal.toString());
                                   if (existeNaLista) {
                                     selectedInstrumento = musico.instrumentoPrincipal.toString();
+                                    selectedInstrumentoNome = selectedInstrumento;
                                     mostrarCampoOutro = false;
                                   } else {
                                     selectedInstrumento = 'Outro';
                                     mostrarCampoOutro = true;
                                     outroInstrumentoController.text = musico.instrumentoPrincipal.toString();
+                                    selectedInstrumentoNome = outroInstrumentoController.text;
                                   }
                                 }
                               }
@@ -167,7 +176,15 @@ class _EscalasPageState extends State<EscalasPage> {
                               ),
                             );
                           }).toList(),
-                          onChanged: (valor) => setStateDialog(() => selectedEventoId = valor),
+                          onChanged: (valor) {
+                            setStateDialog(() {
+                              selectedEventoId = valor;
+                              if (valor != null) {
+                                final evento = provider.eventos.firstWhere((e) => e.id == valor);
+                                selectedEventoNome = evento.nome;
+                              }
+                            });
+                          },
                         );
                       },
                     ),
@@ -196,7 +213,10 @@ class _EscalasPageState extends State<EscalasPage> {
                             setStateDialog(() {
                               selectedInstrumento = valor;
                               mostrarCampoOutro = (valor == 'Outro');
-                              if (!mostrarCampoOutro) outroInstrumentoController.clear();
+                              if (!mostrarCampoOutro) {
+                                outroInstrumentoController.clear();
+                                selectedInstrumentoNome = valor;
+                              }
                             });
                           },
                         );
@@ -212,6 +232,7 @@ class _EscalasPageState extends State<EscalasPage> {
                           border: OutlineInputBorder(),
                           contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         ),
+                        onChanged: (v) => selectedInstrumentoNome = v,
                       ),
                     ],
                     const SizedBox(height: 16),
@@ -262,30 +283,32 @@ class _EscalasPageState extends State<EscalasPage> {
                             final novaEscala = Escala(
                               musicoId: selectedMusicoId!,
                               eventoId: selectedEventoId!,
+                              musicoNome: selectedMusicoNome,
+                              eventoNome: selectedEventoNome,
                               instrumentoNoEvento: instrumentoIdFinal,
+                              instrumentoNome: selectedInstrumentoNome,
                               observacao: obsController.text,
                             );
 
-                            try {
-                              await Provider.of<EscalasProvider>(context, listen: false).adicionarEscala(novaEscala);
-                              if (ctx.mounted) {
-                                Navigator.of(ctx).pop();
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Escala criada com sucesso!'),
-                                    backgroundColor: Colors.green,
+                            // Adiciona ao rascunho local — NÃO envia ao backend ainda
+                            Provider.of<EscalasProvider>(context, listen: false).adicionarRascunho(novaEscala);
+
+                            setState(() => _eventoRascunhoAtivo = selectedEventoId);
+
+                            if (ctx.mounted) {
+                              Navigator.of(ctx).pop();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    '✏️ Músico adicionado ao rascunho. Publique a escala para notificar.',
                                   ),
-                                );
-                              }
-                            } catch (e) {
-                              if (ctx.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Erro ao criar escala')),
-                                );
-                              }
+                                  backgroundColor: Colors.blue,
+                                  duration: Duration(seconds: 3),
+                                ),
+                              );
                             }
                           },
-                          child: const Text('Salvar'),
+                          child: const Text('Adicionar'),
                         ),
                       ],
                     ),
@@ -297,6 +320,58 @@ class _EscalasPageState extends State<EscalasPage> {
         },
       ),
     );
+  }
+
+  Future<void> _publicarEscala(BuildContext context, int eventoId) async {
+    final provider = Provider.of<EscalasProvider>(context, listen: false);
+    final qtd = provider.getRascunhos(eventoId).length;
+
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Publicar Escala'),
+        content: Text(
+          'Isso enviará $qtd ${qtd == 1 ? "músico" : "músicos"} para o servidor e '
+          'disparará as notificações push para cada um. Confirmar?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Publicar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar != true) return;
+
+    final ok = await provider.publicarEscalas(eventoId);
+
+    if (!mounted) return;
+
+    if (ok) {
+      setState(() => _eventoRascunhoAtivo = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✅ Escala publicada! Músicos foram notificados.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            provider.errorMessage ?? 'Erro ao publicar escala.',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Widget _buildFiltros() {
@@ -335,21 +410,48 @@ class _EscalasPageState extends State<EscalasPage> {
 
   Widget _buildEscalaCard(BuildContext context, Escala escala, bool isLider, int? currentUserId) {
     final isMinhaEscala = currentUserId != null && escala.musicoId == currentUserId;
+    final isRascunho = (escala.id ?? 0) < 0;
 
     return Card(
       elevation: 2,
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: isRascunho ? const BorderSide(color: Colors.blue, width: 1.5) : BorderSide.none,
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Badge de rascunho
+            if (isRascunho)
+              Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: const Text(
+                  '✏️ Rascunho — não publicado',
+                  style: TextStyle(fontSize: 12, color: Colors.blue, fontWeight: FontWeight.w600),
+                ),
+              ),
             Row(
               children: [
                 Icon(
-                  escala.confirmado ? Icons.check_circle : Icons.pending,
-                  color: escala.confirmado ? Colors.green : Colors.orange,
+                  isRascunho
+                      ? Icons.edit_note
+                      : escala.confirmado
+                          ? Icons.check_circle
+                          : Icons.pending,
+                  color: isRascunho
+                      ? Colors.blue
+                      : escala.confirmado
+                          ? Colors.green
+                          : Colors.orange,
                   size: 32,
                 ),
                 const SizedBox(width: 12),
@@ -362,9 +464,17 @@ class _EscalasPageState extends State<EscalasPage> {
                         style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       Text(
-                        escala.confirmado ? 'Confirmado' : 'Pendente',
+                        isRascunho
+                            ? 'Aguardando publicação'
+                            : escala.confirmado
+                                ? 'Confirmado'
+                                : 'Pendente',
                         style: TextStyle(
-                          color: escala.confirmado ? Colors.green : Colors.orange,
+                          color: isRascunho
+                              ? Colors.blue
+                              : escala.confirmado
+                                  ? Colors.green
+                                  : Colors.orange,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -373,8 +483,19 @@ class _EscalasPageState extends State<EscalasPage> {
                 ),
                 if (isLider)
                   IconButton(
-                    icon: const Icon(Icons.delete_outline, color: Colors.red),
-                    onPressed: () => _confirmarDelecao(context, escala),
+                    icon: Icon(
+                      isRascunho ? Icons.close : Icons.delete_outline,
+                      color: Colors.red,
+                    ),
+                    tooltip: isRascunho ? 'Remover do rascunho' : 'Remover escala',
+                    onPressed: () {
+                      if (isRascunho) {
+                        Provider.of<EscalasProvider>(context, listen: false)
+                            .removerRascunho(escala.eventoId, escala.id!);
+                      } else {
+                        _confirmarDelecao(context, escala);
+                      }
+                    },
                   ),
               ],
             ),
@@ -383,7 +504,8 @@ class _EscalasPageState extends State<EscalasPage> {
             if (escala.instrumentoNoEvento != null) _buildInfoRow(Icons.music_note, escala.instrumentoNome.toString()),
             if (escala.observacao != null && escala.observacao!.isNotEmpty)
               _buildInfoRow(Icons.note, escala.observacao!),
-            if (isMinhaEscala || isLider) ...[
+            // Botão de confirmar presença — apenas em escalas já publicadas
+            if (!isRascunho && (isMinhaEscala || isLider)) ...[
               const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
@@ -472,7 +594,7 @@ class _EscalasPageState extends State<EscalasPage> {
       floatingActionButton: isLider
           ? FloatingActionButton(
               onPressed: () => _mostrarDialogoAdicionar(context),
-              tooltip: 'Criar Escala',
+              tooltip: 'Adicionar ao Rascunho',
               child: const Icon(Icons.add),
             )
           : null,
@@ -485,7 +607,14 @@ class _EscalasPageState extends State<EscalasPage> {
             );
           }
 
-          if (provider.escalas.isEmpty) {
+          // Mescla rascunhos + escalas publicadas para exibição
+          final todasEscalas = [
+            // Rascunhos do evento ativo (se houver) no topo
+            if (_eventoRascunhoAtivo != null) ...provider.getRascunhos(_eventoRascunhoAtivo!),
+            ...provider.escalas,
+          ];
+
+          if (todasEscalas.isEmpty) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -506,13 +635,54 @@ class _EscalasPageState extends State<EscalasPage> {
             );
           }
 
+          // Filtro não se aplica a rascunhos
+          final rascunhosAtivos =
+              _eventoRascunhoAtivo != null ? provider.getRascunhos(_eventoRascunhoAtivo!) : <Escala>[];
           final escalasFiltradas = _filtrarEscalas(provider.escalas);
+          final listaFinal = [...rascunhosAtivos, ...escalasFiltradas];
 
           return Column(
             children: [
               _buildFiltros(),
+
+              // Banner de publicação — exibido quando há rascunhos pendentes
+              if (isLider && _eventoRascunhoAtivo != null && rascunhosAtivos.isNotEmpty)
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline, color: Colors.blue),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          '${rascunhosAtivos.length} ${rascunhosAtivos.length == 1 ? "músico aguardando" : "músicos aguardando"} publicação.',
+                          style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        icon: const Icon(Icons.send, size: 16),
+                        label: const Text('Publicar'),
+                        onPressed: () => _publicarEscala(context, _eventoRascunhoAtivo!),
+                      ),
+                    ],
+                  ),
+                ),
+
               Expanded(
-                child: escalasFiltradas.isEmpty
+                child: listaFinal.isEmpty
                     ? Center(
                         child: Text(
                           'Nenhuma escala $_filtro',
@@ -522,11 +692,11 @@ class _EscalasPageState extends State<EscalasPage> {
                     : RefreshIndicator(
                         onRefresh: _carregarTudo,
                         child: ListView.builder(
-                          itemCount: escalasFiltradas.length,
+                          itemCount: listaFinal.length,
                           itemBuilder: (context, index) {
                             return _buildEscalaCard(
                               context,
-                              escalasFiltradas[index],
+                              listaFinal[index],
                               isLider,
                               currentUserId,
                             );
