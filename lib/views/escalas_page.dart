@@ -412,26 +412,36 @@ class _EscalasPageState extends State<EscalasPage> {
   // ── ações ─────────────────────────────────────────────────────────────────
 
   Future<void> _confirmarPresenca(BuildContext context, Escala escala, bool confirmado) async {
+    // ✅ Captura o messenger ANTES do await — seguro mesmo após deactivate
+    final messenger = ScaffoldMessenger.of(context);
+
     try {
-      await context.read<EscalasProvider>().confirmarPresenca(escala.id!, confirmado);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+      final ok = await context.read<EscalasProvider>().confirmarPresenca(escala.id!, confirmado);
+
+      if (!mounted) return; // widget pode ter saído da árvore
+
+      if (ok) {
+        messenger.showSnackBar(
           SnackBar(
             content: Text(confirmado ? 'Presença confirmada!' : 'Presença desmarcada'),
             backgroundColor: confirmado ? Colors.green : Colors.orange,
             duration: const Duration(seconds: 2),
           ),
         );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Erro ao confirmar presença'),
-            backgroundColor: Colors.red,
-          ),
+      } else {
+        final erro = context.read<EscalasProvider>().errorMessage ?? 'Erro ao confirmar presença';
+        messenger.showSnackBar(
+          SnackBar(content: Text(erro), backgroundColor: Colors.red),
         );
       }
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Erro ao confirmar presença'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 

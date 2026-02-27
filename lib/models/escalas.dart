@@ -1,12 +1,11 @@
-// lib/models/escalas.dart
 class Escala {
   final int? id;
   final int musicoId;
   final int eventoId;
   final String? musicoNome;
   final String? eventoNome;
-  final List<int>? instrumentos; // ← M2M (substitui instrumentoNoEvento)
-  final String? instrumentoNome; // ← campo computado read-only do backend
+  final List<int>? instrumentos;
+  final String? instrumentoNome;
   final String? observacao;
   final bool confirmado;
   final DateTime? criadoEm;
@@ -24,34 +23,51 @@ class Escala {
     this.criadoEm,
   });
 
+  // ✅ Só converte tipos — NUNCA retorna 0 como fallback silencioso
+  static int _toInt(dynamic value) {
+    if (value is int) return value;
+    if (value is String) return int.parse(value); // lança exceção se inválido
+    throw FormatException('Esperado int, recebido: ${value.runtimeType} = $value');
+  }
+
+  static int? _toIntNullable(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
   factory Escala.fromJson(Map<String, dynamic> json) {
+    List<int>? instrumentos;
+    final raw = json['instrumentos'];
+    if (raw is List) {
+      instrumentos = raw.map((e) => _toIntNullable(e)).whereType<int>().toList();
+    }
+
     return Escala(
-      id: json['id'],
-      musicoId: json['musico'],
-      eventoId: json['evento'],
+      id: _toIntNullable(json['id']),
+      musicoId: _toInt(json['musico']),
+      eventoId: _toInt(json['evento']),
       musicoNome: json['musico_nome'],
       eventoNome: json['evento_nome'],
       observacao: json['observacao'],
-      // Suporte a lista de IDs (M2M) — tolerante a null
-      instrumentos: json['instrumentos'] != null ? List<int>.from(json['instrumentos'] as List) : null,
+      instrumentos: instrumentos,
       instrumentoNome: json['instrumento_nome'],
       confirmado: json['confirmado'] ?? false,
-      criadoEm: json['criado_em'] != null ? DateTime.parse(json['criado_em'] as String) : null,
+      criadoEm: json['criado_em'] != null ? DateTime.tryParse(json['criado_em']) : null,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      if (id != null) 'id': id,
+      if (id != null && id! > 0) 'id': id,
       'musico': musicoId,
       'evento': eventoId,
-      // Só envia se houver instrumentos selecionados
-      if (instrumentos != null && instrumentos!.isNotEmpty) 'instrumentos': instrumentos,
-      if (observacao != null && observacao!.isNotEmpty) 'observacao': observacao,
+      'instrumentos': instrumentos ?? [],
+      'observacao': observacao ?? '',
     };
   }
 
-  /// Cópia imutável com campos opcionalmente sobrescritos (padrão copyWith)
   Escala copyWith({
     int? id,
     int? musicoId,
