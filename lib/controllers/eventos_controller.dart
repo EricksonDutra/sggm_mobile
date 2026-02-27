@@ -133,14 +133,15 @@ class EventoProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await ApiService.post(
-        '$apiUrl$eventoId/adicionar_repertorio/',
-        body: {'musicas': musicaIds},
+      final response = await ApiService.put(
+        // PUT em vez de POST
+        '$apiUrl$eventoId/atualizar_repertorio/', // novo endpoint
+        body: {'musicas': musicaIds}, // lista final completa
       );
       AppLogger.debug('atualizarRepertorio status: ${response.statusCode}');
 
       if (response.statusCode! >= 200 && response.statusCode! <= 299) {
-        AppLogger.info('Repertório do evento $eventoId atualizado');
+        AppLogger.info('Repertório do evento $eventoId substituído (${musicaIds.length} músicas)');
         await listarEventos();
         return true;
       } else {

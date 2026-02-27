@@ -256,12 +256,12 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
     }
   }
 
-  // --- INTERFACE: Selecionar Músicas ---
   void _mostrarSelecaoMusicas(BuildContext context, Evento eventoAtual) {
-    List<int> selecionadas = [];
-    if (eventoAtual.repertorio != null) {
-      selecionadas = eventoAtual.repertorio!.map((m) => m.id!).toList();
-    }
+    final Set<int> selecionadas = {
+      ...?eventoAtual.repertorio?.where((m) => m.id != null).map((m) => m.id!),
+    };
+    final TextEditingController buscaController = TextEditingController();
+    String termoBusca = '';
 
     showDialog(
       context: context,
@@ -270,44 +270,149 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
           builder: (context, setStateDialog) {
             return AlertDialog(
               title: const Text('Gerenciar Setlist'),
+              contentPadding: const EdgeInsets.fromLTRB(0, 16, 0, 0),
               content: SizedBox(
                 width: double.maxFinite,
                 child: Consumer<MusicasProvider>(
                   builder: (context, provider, child) {
                     if (provider.musicas.isEmpty) {
-                      return const Center(
+                      return const Padding(
+                        padding: EdgeInsets.all(16),
                         child: Text('Nenhuma música cadastrada no repertório geral.'),
                       );
                     }
 
-                    return ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: provider.musicas.length,
-                      itemBuilder: (context, index) {
-                        final musica = provider.musicas[index];
-                        final estaSelecionado = selecionadas.contains(musica.id);
+                    final musicasFiltradas = termoBusca.isEmpty
+                        ? provider.musicas
+                        : provider.musicas
+                            .where(
+                              (m) =>
+                                  m.titulo.toLowerCase().contains(termoBusca.toLowerCase()) ||
+                                  m.artistaNome.toLowerCase().contains(termoBusca.toLowerCase()),
+                            )
+                            .toList();
 
-                        return CheckboxListTile(
-                          title: Text(
-                            musica.titulo,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // ── Campo de busca ──────────────────────────────
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          child: TextField(
+                            controller: buscaController,
+                            autofocus: false,
+                            decoration: InputDecoration(
+                              hintText: 'Buscar música ou artista...',
+                              prefixIcon: const Icon(Icons.search, size: 20),
+                              suffixIcon: termoBusca.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.clear, size: 18),
+                                      onPressed: () {
+                                        buscaController.clear();
+                                        setStateDialog(() => termoBusca = '');
+                                      },
+                                    )
+                                  : null,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                            ),
+                            onChanged: (v) => setStateDialog(() => termoBusca = v),
                           ),
-                          subtitle: Text('${musica.artistaNome} • Tom: ${musica.tom ?? "?"}'),
-                          value: estaSelecionado,
-                          activeColor: Colors.teal,
-                          onChanged: (bool? value) {
-                            setStateDialog(() {
-                              if (value == true) {
-                                if (musica.id != null) {
-                                  selecionadas.add(musica.id!);
-                                }
-                              } else {
-                                selecionadas.remove(musica.id);
-                              }
-                            });
-                          },
-                        );
-                      },
+                        ),
+
+                        // ── Contador ────────────────────────────────────
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                          child: Row(
+                            children: [
+                              Text(
+                                '${selecionadas.length} selecionada${selecionadas.length != 1 ? "s" : ""}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              if (termoBusca.isNotEmpty) ...[
+                                const SizedBox(width: 6),
+                                Text(
+                                  '• ${musicasFiltradas.length} resultado${musicasFiltradas.length != 1 ? "s" : ""}',
+                                  style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+
+                        const Divider(height: 1),
+
+                        // ── Lista ───────────────────────────────────────
+                        Flexible(
+                          child: musicasFiltradas.isEmpty
+                              ? Padding(
+                                  padding: const EdgeInsets.all(24),
+                                  child: Text(
+                                    'Nenhuma música encontrada para "$termoBusca"',
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(color: Colors.grey),
+                                  ),
+                                )
+                              : ListView.builder(
+                                  shrinkWrap: true,
+                                  itemCount: musicasFiltradas.length,
+                                  itemBuilder: (context, index) {
+                                    final musica = musicasFiltradas[index];
+                                    final id = musica.id;
+                                    final selecionado = id != null && selecionadas.contains(id);
+
+                                    return CheckboxListTile(
+                                      dense: true,
+                                      contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 0,
+                                      ),
+                                      value: selecionado,
+                                      activeColor: Colors.teal,
+                                      // Nome + artista na mesma linha
+                                      title: RichText(
+                                        overflow: TextOverflow.ellipsis,
+                                        text: TextSpan(
+                                          style: DefaultTextStyle.of(context).style,
+                                          children: [
+                                            TextSpan(
+                                              text: musica.titulo,
+                                              style: const TextStyle(fontWeight: FontWeight.w600),
+                                            ),
+                                            TextSpan(
+                                              text: '  •  ${musica.artistaNome}',
+                                              style: TextStyle(
+                                                color: Colors.grey[600],
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      onChanged: (bool? value) {
+                                        if (id == null) return;
+                                        setStateDialog(() {
+                                          if (value == true) {
+                                            selecionadas.add(id);
+                                          } else {
+                                            selecionadas.remove(id);
+                                          }
+                                        });
+                                      },
+                                    );
+                                  },
+                                ),
+                        ),
+                      ],
                     );
                   },
                 ),
@@ -318,22 +423,29 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
                   child: const Text('Cancelar'),
                 ),
                 ElevatedButton(
-                  onPressed: () {
-                    Provider.of<EventoProvider>(context, listen: false)
-                        .atualizarRepertorio(widget.evento.id!, selecionadas)
-                        .then((_) {
-                      Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Setlist salvo com sucesso!')),
-                      );
-                    }).catchError((e) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Erro ao salvar: $e')),
-                      );
-                    });
+                  onPressed: () async {
+                    try {
+                      await Provider.of<EventoProvider>(context, listen: false)
+                          .atualizarRepertorio(widget.evento.id!, selecionadas.toList());
+                      if (context.mounted) Navigator.pop(ctx);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Setlist salvo com sucesso!'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Erro ao salvar: $e')),
+                        );
+                      }
+                    }
                   },
                   child: const Text('Salvar'),
-                )
+                ),
               ],
             );
           },
@@ -488,6 +600,7 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
                         onPressed: () => _mostrarSelecaoMusicas(context, eventoAtual),
                       ),
                     ),
+                  const Padding(padding: EdgeInsets.only(bottom: 16))
                 ],
               );
             },
