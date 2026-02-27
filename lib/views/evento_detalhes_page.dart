@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:sggm/controllers/auth_controller.dart';
 import 'package:sggm/models/instrumentos.dart';
 import 'package:sggm/util/app_logger.dart';
+import 'package:sggm/views/escalas_page.dart';
 import 'package:sggm/views/musica_detalhes_page.dart';
 import 'package:sggm/views/widgets/dialogs/confirm_delete_dialog.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -341,160 +342,6 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
     );
   }
 
-  // --- LÓGICA DA ESCALA (Adicionar Músico) ---
-  void _adicionarMusicoNaEscala(BuildContext context) {
-    final outroInstrumentoController = TextEditingController();
-    final obsController = TextEditingController();
-    int? selectedMusicoId;
-    int? selectedInstrumentoId;
-    bool mostrarCampoOutro = false;
-
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setStateDialog) {
-            return AlertDialog(
-              title: const Text('Escalar Músico'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Consumer<MusicosProvider>(
-                      builder: (context, provider, child) {
-                        if (provider.musicos.isEmpty) {
-                          return const Text('Nenhum músico cadastrado');
-                        }
-
-                        return DropdownButtonFormField<int>(
-                          decoration: const InputDecoration(
-                            labelText: 'Músico',
-                            border: OutlineInputBorder(),
-                          ),
-                          initialValue: selectedMusicoId,
-                          isExpanded: true,
-                          items: provider.musicos.map((m) {
-                            return DropdownMenuItem<int>(
-                              value: m.id,
-                              child: Text(m.nome),
-                            );
-                          }).toList(),
-                          onChanged: (v) {
-                            setStateDialog(() {
-                              selectedMusicoId = v;
-
-                              if (v != null) {
-                                final musico = provider.musicos.firstWhere((m) => m.id == v);
-                                if (musico.instrumentoPrincipal != null) {
-                                  selectedInstrumentoId = musico.instrumentoPrincipal;
-                                  mostrarCampoOutro = false;
-                                }
-                              }
-                            });
-                          },
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    Consumer<InstrumentosProvider>(
-                      builder: (context, provider, child) {
-                        if (provider.instrumentos.isEmpty) {
-                          return const Text('Nenhum instrumento cadastrado');
-                        }
-
-                        return DropdownButtonFormField<int>(
-                          decoration: const InputDecoration(
-                            labelText: 'Instrumento',
-                            border: OutlineInputBorder(),
-                          ),
-                          initialValue: selectedInstrumentoId,
-                          isExpanded: true,
-                          items: provider.instrumentos.map((inst) {
-                            return DropdownMenuItem<int>(
-                              value: inst.id,
-                              child: Text(inst.nome),
-                            );
-                          }).toList(),
-                          onChanged: (v) {
-                            setStateDialog(() {
-                              selectedInstrumentoId = v;
-                              if (v != null) {
-                                final inst = provider.instrumentos.firstWhere((i) => i.id == v);
-                                mostrarCampoOutro = inst.nome.toLowerCase() == 'outro';
-                              }
-                            });
-                          },
-                        );
-                      },
-                    ),
-                    if (mostrarCampoOutro)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8.0),
-                        child: TextField(
-                          controller: outroInstrumentoController,
-                          decoration: const InputDecoration(
-                            labelText: 'Nome do Instrumento',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: obsController,
-                      decoration: const InputDecoration(
-                        labelText: 'Observação',
-                        border: OutlineInputBorder(),
-                      ),
-                      maxLines: 2,
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Cancelar'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    if (selectedMusicoId == null || selectedInstrumentoId == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Selecione músico e instrumento')),
-                      );
-                      return;
-                    }
-
-                    final nova = Escala(
-                      musicoId: selectedMusicoId!,
-                      eventoId: widget.evento.id!,
-                      instrumentoNoEvento: selectedInstrumentoId,
-                      observacao: obsController.text.isEmpty ? null : obsController.text,
-                    );
-
-                    Provider.of<EscalasProvider>(context, listen: false).adicionarEscala(nova).then((_) {
-                      Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Músico escalado com sucesso!'),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
-                    }).catchError((e) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Erro: $e')),
-                      );
-                    });
-                  },
-                  child: const Text('Adicionar'),
-                )
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -719,7 +566,8 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
                       bottom: 16,
                       right: 16,
                       child: FloatingActionButton.extended(
-                        onPressed: () => _adicionarMusicoNaEscala(context),
+                        onPressed: () =>
+                            Navigator.push(context, MaterialPageRoute(builder: (context) => const EscalasPage())),
                         icon: const Icon(Icons.person_add),
                         label: const Text('Escalar'),
                         backgroundColor: Colors.orangeAccent,

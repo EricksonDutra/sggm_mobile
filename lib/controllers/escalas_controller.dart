@@ -24,21 +24,22 @@ class EscalasProvider extends ChangeNotifier {
 
   List<Escala> getRascunhos(int eventoId) => _rascunhosPorEvento[eventoId] ?? [];
 
-  bool temRascunhos(int eventoId) => (_rascunhosPorEvento[eventoId] ?? []).isNotEmpty;
+  /// NOVO: lista todos os rascunhos (de todos os eventos), útil para organizar na UI.
+  List<Escala> listarRascunhos() => _rascunhosPorEvento.values.expand((e) => e).toList();
 
   void adicionarRascunho(Escala escala) {
-    final lista = List<Escala>.from(_rascunhosPorEvento[escala.eventoId] ?? []);
-    // IDs temporários negativos para diferenciar de registros reais do backend
+    final lista = _rascunhosPorEvento[escala.eventoId] ?? [];
+    // Usa ID temporário negativo para diferenciar do backend
     final tempId = -(lista.length + 1);
     lista.add(Escala(
       id: tempId,
       musicoId: escala.musicoId,
       eventoId: escala.eventoId,
       musicoNome: escala.musicoNome,
-      eventoNome: escala.eventoNome,
       instrumentoNoEvento: escala.instrumentoNoEvento,
       instrumentoNome: escala.instrumentoNome,
       observacao: escala.observacao,
+      eventoNome: escala.eventoNome,
     ));
     _rascunhosPorEvento[escala.eventoId] = lista;
     notifyListeners();
@@ -49,15 +50,8 @@ class EscalasProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void limparRascunhos(int eventoId) {
-    _rascunhosPorEvento.remove(eventoId);
-    notifyListeners();
-  }
-
-  /// Envia todos os rascunhos do evento para o backend de uma vez.
-  /// As notificações FCM só disparam aqui.
   Future<bool> publicarEscalas(int eventoId) async {
-    final rascunhos = List<Escala>.from(_rascunhosPorEvento[eventoId] ?? []);
+    final rascunhos = _rascunhosPorEvento[eventoId] ?? [];
     if (rascunhos.isEmpty) return false;
 
     _isLoading = true;
@@ -67,21 +61,16 @@ class EscalasProvider extends ChangeNotifier {
     try {
       for (final escala in rascunhos) {
         final response = await ApiService.post(apiUrl, body: escala.toJson());
-        AppLogger.debug('publicarEscalas POST status: ${response.statusCode}');
-
         if (response.statusCode == 201 || response.statusCode == 200) {
-          final novaEscala = Escala.fromJson(response.data);
-          _escalas.add(novaEscala);
-          AppLogger.info('Escala publicada: ID ${novaEscala.id}');
+          _escalas.add(Escala.fromJson(response.data));
         } else {
           throw _exceptionFromStatus(response.statusCode, 'Falha ao publicar escala');
         }
       }
-      _rascunhosPorEvento.remove(eventoId);
+      _rascunhosPorEvento.remove(eventoId); // limpa rascunhos após publicar
       return true;
     } catch (e) {
-      final appException = ErrorHandler.handle(e);
-      _errorMessage = appException.message;
+      _errorMessage = ErrorHandler.handle(e).message;
       AppLogger.error('publicarEscalas', e);
       return false;
     } finally {
@@ -267,6 +256,8 @@ class EscalasProvider extends ChangeNotifier {
             confirmado: confirmado,
             criadoEm: escalaAtual.criadoEm,
             eventoId: escalaAtual.eventoId,
+            instrumentoNome: escalaAtual.instrumentoNome,
+            observacao: escalaAtual.observacao,
           );
           AppLogger.info('Presença ${confirmado ? "confirmada" : "desconfirmada"} na escala $escalaId');
         }

@@ -8,9 +8,30 @@ import 'package:sggm/controllers/eventos_controller.dart';
 import 'package:sggm/controllers/instrumentos_controller.dart';
 import 'package:sggm/controllers/musicos_controller.dart';
 import 'package:sggm/models/escalas.dart';
+import 'package:sggm/models/eventos.dart';
 import 'package:sggm/models/instrumentos.dart';
 import 'package:sggm/views/widgets/dialogs/confirm_delete_dialog.dart';
 import 'package:sggm/views/widgets/loading/shimmer_card.dart';
+
+// ── Modelo de filtro avançado ─────────────────────────────────────────────────
+
+class _EscalaFiltro {
+  int? ano;
+  int? mes;
+  String? musicoNome;
+  String? instrumentoNome;
+
+  bool get ativo => ano != null || mes != null || musicoNome != null || instrumentoNome != null;
+
+  void limpar() {
+    ano = null;
+    mes = null;
+    musicoNome = null;
+    instrumentoNome = null;
+  }
+}
+
+// ── Widget principal ──────────────────────────────────────────────────────────
 
 class EscalasPage extends StatefulWidget {
   const EscalasPage({super.key});
@@ -21,17 +42,18 @@ class EscalasPage extends StatefulWidget {
 
 class _EscalasPageState extends State<EscalasPage> {
   String _filtro = 'todas';
+  final _filtroAvancado = _EscalaFiltro();
 
-  // Evento selecionado no diálogo de adicionar — usado para controlar rascunhos
-  int? _eventoRascunhoAtivo;
+  // Mantido como variável de instância para ser acessível no AppBar
+  Map<int, Evento> _eventosMap = {};
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _carregarTudo();
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _carregarTudo());
   }
+
+  // ── carregamento ──────────────────────────────────────────────────────────
 
   Future<void> _carregarTudo() async {
     try {
@@ -44,13 +66,51 @@ class _EscalasPageState extends State<EscalasPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao carregar escalas: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Erro ao carregar escalas: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
   }
 
-  List<Escala> _filtrarEscalas(List<Escala> escalas) {
+  // ── helpers de data ───────────────────────────────────────────────────────
+
+  DateTime? _parseDataEvento(String raw) {
+    if (raw.trim().isEmpty) return null;
+    final iso = DateTime.tryParse(raw);
+    if (iso != null) return iso;
+    final partes = raw.split('T').first.split('-');
+    if (partes.length == 3) {
+      final y = int.tryParse(partes[0]);
+      final m = int.tryParse(partes[1]);
+      final d = int.tryParse(partes[2]);
+      if (y != null && m != null && d != null) return DateTime(y, m, d);
+    }
+    return null;
+  }
+
+  String _formatarData(DateTime dt) => '${dt.day.toString().padLeft(2, '0')}/'
+      '${dt.month.toString().padLeft(2, '0')}/'
+      '${dt.year}';
+
+  String _formatarHora(DateTime dt) => '${dt.hour.toString().padLeft(2, '0')}:'
+      '${dt.minute.toString().padLeft(2, '0')}';
+
+  /// Evento considerado passado 3h após início.
+  /// Sem hora definida: passado às 03:00 do dia seguinte.
+  bool _eventoEhPassado(DateTime dataEvento) {
+    final temHorario = dataEvento.hour != 0 || dataEvento.minute != 0;
+    final corte = temHorario
+        ? dataEvento.add(const Duration(hours: 3))
+        : DateTime(dataEvento.year, dataEvento.month, dataEvento.day + 1, 3, 0);
+    return DateTime.now().isAfter(corte);
+  }
+
+  // ── filtros ───────────────────────────────────────────────────────────────
+
+  List<Escala> _filtrarPorStatus(List<Escala> escalas) {
     switch (_filtro) {
       case 'pendentes':
         return escalas.where((e) => !e.confirmado).toList();
@@ -60,6 +120,298 @@ class _EscalasPageState extends State<EscalasPage> {
         return escalas;
     }
   }
+
+  List<Escala> _aplicarFiltroAvancado(List<Escala> escalas, Map<int, Evento> eventosMap) {
+    if (!_filtroAvancado.ativo) return escalas;
+
+    return escalas.where((e) {
+      final ev = eventosMap[e.eventoId];
+      final dt = ev != null ? _parseDataEvento(ev.dataEvento) : null;
+
+      if (_filtroAvancado.ano != null && dt?.year != _filtroAvancado.ano) {
+        return false;
+      }
+      if (_filtroAvancado.mes != null && dt?.month != _filtroAvancado.mes) {
+        return false;
+      }
+      if (_filtroAvancado.musicoNome != null &&
+          !(e.musicoNome ?? '').toLowerCase().contains(_filtroAvancado.musicoNome!.toLowerCase())) {
+        return false;
+      }
+      if (_filtroAvancado.instrumentoNome != null && e.instrumentoNome?.toString() != _filtroAvancado.instrumentoNome) {
+        return false;
+      }
+      return true;
+    }).toList();
+  }
+
+  // ── bottom sheet de filtros ───────────────────────────────────────────────
+
+  void _abrirFiltros(BuildContext context) {
+    final anos = _eventosMap.values.map((e) => _parseDataEvento(e.dataEvento)?.year).whereType<int>().toSet().toList()
+      ..sort((a, b) => b.compareTo(a));
+
+    const mesesNomes = [
+      'Jan',
+      'Fev',
+      'Mar',
+      'Abr',
+      'Mai',
+      'Jun',
+      'Jul',
+      'Ago',
+      'Set',
+      'Out',
+      'Nov',
+      'Dez',
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) {
+          return DraggableScrollableSheet(
+            initialChildSize: 0.75,
+            minChildSize: 0.5,
+            maxChildSize: 0.95,
+            expand: false,
+            builder: (_, scrollController) => Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+              child: ListView(
+                controller: scrollController,
+                children: [
+                  // Handle
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+
+                  // Cabeçalho
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Filtros',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      TextButton.icon(
+                        onPressed: () {
+                          setSheet(() => _filtroAvancado.limpar());
+                          setState(() {});
+                          Navigator.pop(ctx);
+                        },
+                        icon: const Icon(Icons.clear, size: 18),
+                        label: const Text('Limpar tudo'),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 24),
+
+                  // ── Ano ──────────────────────────────────────────────────
+                  const Text('Ano', style: TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 10),
+                  anos.isEmpty
+                      ? const Text('Nenhum ano disponível', style: TextStyle(color: Colors.grey))
+                      : Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
+                          children: anos
+                              .map((ano) => ChoiceChip(
+                                    label: Text('$ano'),
+                                    selected: _filtroAvancado.ano == ano,
+                                    onSelected: (v) => setSheet(() => _filtroAvancado.ano = v ? ano : null),
+                                  ))
+                              .toList(),
+                        ),
+                  const SizedBox(height: 20),
+
+                  // ── Mês ──────────────────────────────────────────────────
+                  const Text('Mês', style: TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: List.generate(12, (i) {
+                      final mes = i + 1;
+                      return ChoiceChip(
+                        label: Text(mesesNomes[i]),
+                        selected: _filtroAvancado.mes == mes,
+                        onSelected: (v) => setSheet(() => _filtroAvancado.mes = v ? mes : null),
+                      );
+                    }),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // ── Músico ───────────────────────────────────────────────
+                  const Text('Músico', style: TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 10),
+                  Consumer<MusicosProvider>(
+                    builder: (context, provider, _) {
+                      final nomes = provider.musicos.map((m) => m.nome).toList();
+
+                      return Autocomplete<String>(
+                        initialValue: TextEditingValue(
+                          text: _filtroAvancado.musicoNome ?? '',
+                        ),
+                        optionsBuilder: (TextEditingValue textEditingValue) {
+                          if (textEditingValue.text.isEmpty) return nomes;
+                          return nomes
+                              .where((nome) => nome.toLowerCase().contains(textEditingValue.text.toLowerCase()));
+                        },
+                        onSelected: (valor) => setSheet(() => _filtroAvancado.musicoNome = valor),
+                        fieldViewBuilder: (context, controller, focusNode, onSubmitted) {
+                          return TextField(
+                            controller: controller,
+                            focusNode: focusNode,
+                            decoration: InputDecoration(
+                              border: const OutlineInputBorder(),
+                              hintText: 'Digite o nome do músico',
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              suffixIcon: _filtroAvancado.musicoNome != null
+                                  ? IconButton(
+                                      icon: const Icon(Icons.clear, size: 18),
+                                      onPressed: () {
+                                        controller.clear();
+                                        setSheet(() => _filtroAvancado.musicoNome = null);
+                                      },
+                                    )
+                                  : const Icon(Icons.search, size: 18),
+                            ),
+                            onChanged: (v) {
+                              if (v.isEmpty) setSheet(() => _filtroAvancado.musicoNome = null);
+                            },
+                          );
+                        },
+                        optionsViewBuilder: (context, onSelected, options) {
+                          return Align(
+                            alignment: Alignment.topLeft,
+                            child: Material(
+                              elevation: 4,
+                              borderRadius: BorderRadius.circular(8),
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(maxHeight: 200),
+                                child: ListView.builder(
+                                  padding: EdgeInsets.zero,
+                                  shrinkWrap: true,
+                                  itemCount: options.length,
+                                  itemBuilder: (context, index) {
+                                    final nome = options.elementAt(index);
+                                    return ListTile(
+                                      dense: true,
+                                      leading: const Icon(Icons.person_outline, size: 20),
+                                      title: Text(nome),
+                                      onTap: () => onSelected(nome),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 20),
+
+                  // ── Instrumento ──────────────────────────────────────────
+                  const Text('Instrumento', style: TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 10),
+                  Consumer<InstrumentosProvider>(
+                    builder: (context, provider, _) {
+                      return Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: [
+                          ChoiceChip(
+                            label: const Text('Todos'),
+                            selected: _filtroAvancado.instrumentoNome == null,
+                            onSelected: (_) => setSheet(() => _filtroAvancado.instrumentoNome = null),
+                          ),
+                          ...provider.instrumentos.map((inst) => ChoiceChip(
+                                label: Text(inst.nome),
+                                selected: _filtroAvancado.instrumentoNome == inst.nome,
+                                onSelected: (v) =>
+                                    setSheet(() => _filtroAvancado.instrumentoNome = v ? inst.nome : null),
+                              )),
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 28),
+
+                  // ── Botão aplicar ────────────────────────────────────────
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.check),
+                      label: const Text('Aplicar filtros'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: () {
+                        setState(() {});
+                        Navigator.pop(ctx);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // ── chips de status ───────────────────────────────────────────────────────
+
+  Widget _buildFiltrosStatus() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          FilterChip(
+            label: const Text('Todas'),
+            selected: _filtro == 'todas',
+            onSelected: (v) {
+              if (v) setState(() => _filtro = 'todas');
+            },
+          ),
+          const SizedBox(width: 8),
+          FilterChip(
+            label: const Text('Pendentes'),
+            selected: _filtro == 'pendentes',
+            onSelected: (v) {
+              if (v) setState(() => _filtro = 'pendentes');
+            },
+          ),
+          const SizedBox(width: 8),
+          FilterChip(
+            label: const Text('Confirmadas'),
+            selected: _filtro == 'confirmadas',
+            onSelected: (v) {
+              if (v) setState(() => _filtro = 'confirmadas');
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── ações ─────────────────────────────────────────────────────────────────
 
   Future<void> _confirmarPresenca(BuildContext context, Escala escala, bool confirmado) async {
     try {
@@ -76,11 +428,56 @@ class _EscalasPageState extends State<EscalasPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Erro ao confirmar presença'), backgroundColor: Colors.red),
+          const SnackBar(
+            content: Text('Erro ao confirmar presença'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
   }
+
+  Future<void> _publicarEscala(BuildContext context, int eventoId) async {
+    final provider = context.read<EscalasProvider>();
+    final qtd = provider.getRascunhos(eventoId).length;
+
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Publicar escala'),
+        content: Text(
+          'Isso enviará $qtd ${qtd == 1 ? "músico" : "músicos"} para o servidor '
+          'e disparará as notificações push. Confirmar?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Publicar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar != true) return;
+
+    final ok = await provider.publicarEscalas(eventoId);
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+            ok ? '✅ Escala publicada! Músicos notificados.' : (provider.errorMessage ?? 'Erro ao publicar escala')),
+        backgroundColor: ok ? Colors.green : Colors.red,
+      ),
+    );
+  }
+
+  // ── diálogo adicionar rascunho ────────────────────────────────────────────
 
   void _mostrarDialogoAdicionar(BuildContext context) {
     final obsController = TextEditingController();
@@ -108,10 +505,12 @@ class _EscalasPageState extends State<EscalasPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Nova Escala',
+                      'Nova Escala (rascunho)',
                       style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 20),
+
+                    // Músico
                     Consumer<MusicosProvider>(
                       builder: (context, provider, child) {
                         return DropdownButtonFormField<int>(
@@ -122,12 +521,12 @@ class _EscalasPageState extends State<EscalasPage> {
                           ),
                           isExpanded: true,
                           initialValue: selectedMusicoId,
-                          items: provider.musicos.map((musico) {
-                            return DropdownMenuItem<int>(
-                              value: musico.id,
-                              child: Text(musico.nome, overflow: TextOverflow.ellipsis),
-                            );
-                          }).toList(),
+                          items: provider.musicos
+                              .map((musico) => DropdownMenuItem<int>(
+                                    value: musico.id,
+                                    child: Text(musico.nome, overflow: TextOverflow.ellipsis),
+                                  ))
+                              .toList(),
                           onChanged: (valor) {
                             setStateDialog(() {
                               selectedMusicoId = valor;
@@ -157,6 +556,8 @@ class _EscalasPageState extends State<EscalasPage> {
                       },
                     ),
                     const SizedBox(height: 16),
+
+                    // Evento
                     Consumer<EventoProvider>(
                       builder: (context, provider, child) {
                         return DropdownButtonFormField<int>(
@@ -167,15 +568,15 @@ class _EscalasPageState extends State<EscalasPage> {
                           ),
                           isExpanded: true,
                           initialValue: selectedEventoId,
-                          items: provider.eventos.map((evento) {
-                            return DropdownMenuItem<int>(
-                              value: evento.id,
-                              child: Text(
-                                '${evento.nome} (${evento.dataEvento.split('T')[0]})',
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            );
-                          }).toList(),
+                          items: provider.eventos
+                              .map((evento) => DropdownMenuItem<int>(
+                                    value: evento.id,
+                                    child: Text(
+                                      '${evento.nome} (${evento.dataEvento.split('T')[0]})',
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ))
+                              .toList(),
                           onChanged: (valor) {
                             setStateDialog(() {
                               selectedEventoId = valor;
@@ -189,6 +590,8 @@ class _EscalasPageState extends State<EscalasPage> {
                       },
                     ),
                     const SizedBox(height: 16),
+
+                    // Instrumento
                     Consumer<InstrumentosProvider>(
                       builder: (context, provider, child) {
                         final listaOpcoes = [
@@ -203,12 +606,12 @@ class _EscalasPageState extends State<EscalasPage> {
                           ),
                           isExpanded: true,
                           initialValue: selectedInstrumento,
-                          items: listaOpcoes.map((nome) {
-                            return DropdownMenuItem<String>(
-                              value: nome,
-                              child: Text(nome, overflow: TextOverflow.ellipsis),
-                            );
-                          }).toList(),
+                          items: listaOpcoes
+                              .map((nome) => DropdownMenuItem<String>(
+                                    value: nome,
+                                    child: Text(nome, overflow: TextOverflow.ellipsis),
+                                  ))
+                              .toList(),
                           onChanged: (valor) {
                             setStateDialog(() {
                               selectedInstrumento = valor;
@@ -222,6 +625,7 @@ class _EscalasPageState extends State<EscalasPage> {
                         );
                       },
                     ),
+
                     if (mostrarCampoOutro) ...[
                       const SizedBox(height: 16),
                       TextField(
@@ -235,6 +639,7 @@ class _EscalasPageState extends State<EscalasPage> {
                         onChanged: (v) => selectedInstrumentoNome = v,
                       ),
                     ],
+
                     const SizedBox(height: 16),
                     TextField(
                       controller: obsController,
@@ -246,6 +651,7 @@ class _EscalasPageState extends State<EscalasPage> {
                       maxLines: 2,
                     ),
                     const SizedBox(height: 24),
+
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
@@ -255,14 +661,13 @@ class _EscalasPageState extends State<EscalasPage> {
                         ),
                         const SizedBox(width: 8),
                         ElevatedButton(
-                          onPressed: () async {
+                          onPressed: () {
                             if (selectedMusicoId == null || selectedEventoId == null || selectedInstrumento == null) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(content: Text('Preencha os campos obrigatórios!')),
                               );
                               return;
                             }
-
                             if (selectedInstrumento == 'Outro' && outroInstrumentoController.text.isEmpty) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(content: Text('Digite o instrumento!')),
@@ -290,17 +695,14 @@ class _EscalasPageState extends State<EscalasPage> {
                               observacao: obsController.text,
                             );
 
-                            // Adiciona ao rascunho local — NÃO envia ao backend ainda
                             Provider.of<EscalasProvider>(context, listen: false).adicionarRascunho(novaEscala);
-
-                            setState(() => _eventoRascunhoAtivo = selectedEventoId);
 
                             if (ctx.mounted) {
                               Navigator.of(ctx).pop();
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text(
-                                    '✏️ Músico adicionado ao rascunho. Publique a escala para notificar.',
+                                    '✏️ Adicionado ao rascunho. Publique a escala para notificar.',
                                   ),
                                   backgroundColor: Colors.blue,
                                   duration: Duration(seconds: 3),
@@ -322,192 +724,62 @@ class _EscalasPageState extends State<EscalasPage> {
     );
   }
 
-  Future<void> _publicarEscala(BuildContext context, int eventoId) async {
-    final provider = Provider.of<EscalasProvider>(context, listen: false);
-    final qtd = provider.getRascunhos(eventoId).length;
+  // ── card de escala ────────────────────────────────────────────────────────
 
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Publicar Escala'),
-        content: Text(
-          'Isso enviará $qtd ${qtd == 1 ? "músico" : "músicos"} para o servidor e '
-          'disparará as notificações push para cada um. Confirmar?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Publicar'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmar != true) return;
-
-    final ok = await provider.publicarEscalas(eventoId);
-
-    if (!mounted) return;
-
-    if (ok) {
-      setState(() => _eventoRascunhoAtivo = null);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ Escala publicada! Músicos foram notificados.'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            provider.errorMessage ?? 'Erro ao publicar escala.',
-          ),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
-  Widget _buildFiltros() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: Row(
-        children: [
-          FilterChip(
-            label: const Text('Todas'),
-            selected: _filtro == 'todas',
-            onSelected: (selected) {
-              if (selected) setState(() => _filtro = 'todas');
-            },
-          ),
-          const SizedBox(width: 8),
-          FilterChip(
-            label: const Text('Pendentes'),
-            selected: _filtro == 'pendentes',
-            onSelected: (selected) {
-              if (selected) setState(() => _filtro = 'pendentes');
-            },
-          ),
-          const SizedBox(width: 8),
-          FilterChip(
-            label: const Text('Confirmadas'),
-            selected: _filtro == 'confirmadas',
-            onSelected: (selected) {
-              if (selected) setState(() => _filtro = 'confirmadas');
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEscalaCard(BuildContext context, Escala escala, bool isLider, int? currentUserId) {
+  Widget _buildEscalaItem(BuildContext context, Escala escala, bool isLider, int? currentUserId) {
     final isMinhaEscala = currentUserId != null && escala.musicoId == currentUserId;
     final isRascunho = (escala.id ?? 0) < 0;
 
+    final statusIcon = isRascunho
+        ? Icons.edit_note
+        : escala.confirmado
+            ? Icons.check_circle
+            : Icons.pending;
+    final statusColor = isRascunho
+        ? Colors.blue
+        : escala.confirmado
+            ? Colors.green
+            : Colors.orange;
+
     return Card(
-      elevation: 2,
-      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: isRascunho ? const BorderSide(color: Colors.blue, width: 1.5) : BorderSide.none,
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Badge de rascunho
-            if (isRascunho)
-              Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: Colors.blue.shade200),
-                ),
-                child: const Text(
-                  '✏️ Rascunho — não publicado',
-                  style: TextStyle(fontSize: 12, color: Colors.blue, fontWeight: FontWeight.w600),
-                ),
-              ),
-            Row(
+      elevation: 1,
+      margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Column(
+        children: [
+          ListTile(
+            leading: Icon(statusIcon, color: statusColor, size: 30),
+            title: Text(escala.musicoNome ?? 'Músico #${escala.musicoId}'),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  isRascunho
-                      ? Icons.edit_note
-                      : escala.confirmado
-                          ? Icons.check_circle
-                          : Icons.pending,
-                  color: isRascunho
-                      ? Colors.blue
-                      : escala.confirmado
-                          ? Colors.green
-                          : Colors.orange,
-                  size: 32,
+                if (escala.instrumentoNome != null && escala.instrumentoNome!.toString().isNotEmpty)
+                  Text('🎵 ${escala.instrumentoNome}'),
+                if (escala.observacao != null && escala.observacao!.isNotEmpty) Text('📝 ${escala.observacao}'),
+                Text(
+                  isRascunho ? 'Rascunho (não publicado)' : (escala.confirmado ? 'Confirmado' : 'Pendente'),
+                  style: TextStyle(color: statusColor, fontWeight: FontWeight.w600),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        escala.eventoNome ?? 'Evento #${escala.eventoId}',
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        isRascunho
-                            ? 'Aguardando publicação'
-                            : escala.confirmado
-                                ? 'Confirmado'
-                                : 'Pendente',
-                        style: TextStyle(
-                          color: isRascunho
-                              ? Colors.blue
-                              : escala.confirmado
-                                  ? Colors.green
-                                  : Colors.orange,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (isLider)
-                  IconButton(
-                    icon: Icon(
-                      isRascunho ? Icons.close : Icons.delete_outline,
-                      color: Colors.red,
-                    ),
+              ],
+            ),
+            trailing: isLider
+                ? IconButton(
+                    icon: const Icon(Icons.delete_outline, color: Colors.red),
                     tooltip: isRascunho ? 'Remover do rascunho' : 'Remover escala',
                     onPressed: () {
                       if (isRascunho) {
-                        Provider.of<EscalasProvider>(context, listen: false)
-                            .removerRascunho(escala.eventoId, escala.id!);
+                        context.read<EscalasProvider>().removerRascunho(escala.eventoId, escala.id!);
                       } else {
                         _confirmarDelecao(context, escala);
                       }
                     },
-                  ),
-              ],
-            ),
-            const Divider(height: 24),
-            _buildInfoRow(Icons.person, escala.musicoNome ?? 'Músico #${escala.musicoId}'),
-            if (escala.instrumentoNoEvento != null) _buildInfoRow(Icons.music_note, escala.instrumentoNome.toString()),
-            if (escala.observacao != null && escala.observacao!.isNotEmpty)
-              _buildInfoRow(Icons.note, escala.observacao!),
-            // Botão de confirmar presença — apenas em escalas já publicadas
-            if (!isRascunho && (isMinhaEscala || isLider)) ...[
-              const SizedBox(height: 16),
-              SizedBox(
+                  )
+                : null,
+          ),
+          if (!isRascunho && (isMinhaEscala || isLider))
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: () => _confirmarPresenca(context, escala, !escala.confirmado),
@@ -521,23 +793,7 @@ class _EscalasPageState extends State<EscalasPage> {
                   ),
                 ),
               ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(IconData icon, String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: Colors.grey[600]),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(text, style: TextStyle(color: Colors.grey[800])),
-          ),
+            ),
         ],
       ),
     );
@@ -547,32 +803,182 @@ class _EscalasPageState extends State<EscalasPage> {
     final confirmed = await ConfirmDeleteDialog.show(
       context,
       entityName: escala.musicoNome ?? 'este músico',
-      message: 'Deseja remover ${escala.musicoNome ?? "este músico"} da escala?\nEsta ação não pode ser desfeita.',
+      message: 'Deseja remover ${escala.musicoNome ?? "este músico"} da escala?\n'
+          'Esta ação não pode ser desfeita.',
     );
-
     if (confirmed && context.mounted && escala.id != null) {
       try {
         await context.read<EscalasProvider>().deletarEscala(escala.id!);
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Escala removida com sucesso'),
-              backgroundColor: Colors.green,
-            ),
+            const SnackBar(content: Text('Escala removida com sucesso'), backgroundColor: Colors.green),
           );
         }
       } catch (e) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Erro ao remover escala'),
-              backgroundColor: Colors.red,
-            ),
+            const SnackBar(content: Text('Erro ao remover escala'), backgroundColor: Colors.red),
           );
         }
       }
     }
   }
+
+  // ── cabeçalho de evento ───────────────────────────────────────────────────
+
+  Widget _buildEventoHeader({
+    required BuildContext context,
+    required int eventoId,
+    required List<Escala> escalasDoEvento,
+    required Evento? evento,
+    required bool isLider,
+  }) {
+    final provider = context.read<EscalasProvider>();
+    final rascunhos = provider.getRascunhos(eventoId);
+    final publicadas = escalasDoEvento.where((e) => (e.id ?? 0) >= 0).toList();
+    final confirmadas = publicadas.where((e) => e.confirmado).length;
+    final pendentes = publicadas.length - confirmadas;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              evento?.nome ?? escalasDoEvento.first.eventoNome ?? 'Evento #$eventoId',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (publicadas.isNotEmpty)
+            Text(
+              '$confirmadas✅  $pendentes⏳',
+              style: TextStyle(color: Colors.grey[700], fontWeight: FontWeight.w600),
+            ),
+          if (isLider && rascunhos.isNotEmpty) ...[
+            const SizedBox(width: 10),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              icon: const Icon(Icons.send, size: 16),
+              label: Text('Publicar (${rascunhos.length})'),
+              onPressed: () => _publicarEscala(context, eventoId),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ── lista agrupada por evento ─────────────────────────────────────────────
+
+  Widget _buildListaAgrupada({
+    required BuildContext context,
+    required List<Escala> escalas,
+    required Map<int, Evento> eventosMap,
+    required bool isLider,
+    required int? currentUserId,
+    required bool isPassadas,
+  }) {
+    if (escalas.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              isPassadas ? Icons.history : Icons.event_available,
+              size: 52,
+              color: Colors.grey[350],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              isPassadas ? 'Nenhuma escala passada' : 'Nenhuma escala próxima',
+              style: const TextStyle(fontSize: 16, color: Colors.grey),
+            ),
+            if (_filtroAvancado.ativo) ...[
+              const SizedBox(height: 8),
+              TextButton.icon(
+                onPressed: () {
+                  setState(() => _filtroAvancado.limpar());
+                },
+                icon: const Icon(Icons.filter_list_off),
+                label: const Text('Limpar filtros'),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    final Map<int, List<Escala>> porEvento = {};
+    for (final e in escalas) {
+      porEvento.putIfAbsent(e.eventoId, () => []);
+      porEvento[e.eventoId]!.add(e);
+    }
+
+    final eventoIds = porEvento.keys.toList()
+      ..sort((a, b) {
+        final da = eventosMap[a] != null ? _parseDataEvento(eventosMap[a]!.dataEvento) : null;
+        final db = eventosMap[b] != null ? _parseDataEvento(eventosMap[b]!.dataEvento) : null;
+        if (da == null && db == null) return a.compareTo(b);
+        if (da == null) return 1;
+        if (db == null) return -1;
+        final cmp = da.compareTo(db);
+        return isPassadas ? -cmp : cmp;
+      });
+
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 24),
+      children: [
+        for (final eventoId in eventoIds) ...[
+          _buildEventoHeader(
+            context: context,
+            eventoId: eventoId,
+            escalasDoEvento: porEvento[eventoId]!,
+            evento: eventosMap[eventoId],
+            isLider: isLider,
+          ),
+          ExpansionTile(
+            initiallyExpanded: !isPassadas,
+            tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+            title: Builder(builder: (_) {
+              final ev = eventosMap[eventoId];
+              if (ev == null) return const SizedBox.shrink();
+              final dt = _parseDataEvento(ev.dataEvento);
+              if (dt == null) return const SizedBox.shrink();
+              final temHora = ev.dataEvento.contains('T') && (dt.hour != 0 || dt.minute != 0);
+              final horaStr = temHora ? ' • ${_formatarHora(dt)}' : '';
+              return Text(
+                '${_formatarData(dt)}$horaStr',
+                style: TextStyle(color: Colors.grey[600], fontSize: 13),
+              );
+            }),
+            children: [
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: porEvento[eventoId]!.length,
+                itemBuilder: (context, index) => _buildEscalaItem(
+                  context,
+                  porEvento[eventoId]![index],
+                  isLider,
+                  currentUserId,
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+          const Divider(height: 1, indent: 16, endIndent: 16),
+        ],
+      ],
+    );
+  }
+
+  // ── build principal ───────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -580,134 +986,182 @@ class _EscalasPageState extends State<EscalasPage> {
     final isLider = auth.userData?['is_lider'] ?? false;
     final currentUserId = auth.userData?['musico_id'];
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Minhas Escalas'),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _carregarTudo,
-          ),
-        ],
-      ),
-      floatingActionButton: isLider
-          ? FloatingActionButton(
-              onPressed: () => _mostrarDialogoAdicionar(context),
-              tooltip: 'Adicionar ao Rascunho',
-              child: const Icon(Icons.add),
-            )
-          : null,
-      body: Consumer<EscalasProvider>(
-        builder: (context, provider, child) {
-          if (provider.isLoading) {
-            return ListView.builder(
-              itemCount: 4,
-              itemBuilder: (_, __) => const ShimmerCard(height: 160),
-            );
-          }
-
-          // Mescla rascunhos + escalas publicadas para exibição
-          final todasEscalas = [
-            // Rascunhos do evento ativo (se houver) no topo
-            if (_eventoRascunhoAtivo != null) ...provider.getRascunhos(_eventoRascunhoAtivo!),
-            ...provider.escalas,
-          ];
-
-          if (todasEscalas.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.event_busy, size: 64, color: Colors.grey[400]),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Nenhuma escala registrada',
-                    style: TextStyle(fontSize: 18, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    isLider ? 'Toque no + para criar uma escala' : 'Aguarde ser escalado pelo líder',
-                    style: const TextStyle(fontSize: 14, color: Colors.grey),
-                  ),
-                ],
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Minhas Escalas'),
+          centerTitle: true,
+          actions: [
+            // Ícone de filtro com badge quando ativo
+            IconButton(
+              tooltip: 'Filtrar',
+              icon: Badge(
+                isLabelVisible: _filtroAvancado.ativo,
+                child: const Icon(Icons.filter_list),
               ),
+              onPressed: () => _abrirFiltros(context),
+            ),
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: _carregarTudo,
+            ),
+          ],
+          bottom: const TabBar(
+            tabs: [
+              Tab(icon: Icon(Icons.event_available), text: 'Próximas'),
+              Tab(icon: Icon(Icons.history), text: 'Passadas'),
+            ],
+          ),
+        ),
+        floatingActionButton: isLider
+            ? FloatingActionButton(
+                onPressed: () => _mostrarDialogoAdicionar(context),
+                tooltip: 'Adicionar ao rascunho',
+                child: const Icon(Icons.add),
+              )
+            : null,
+        body: Consumer2<EscalasProvider, EventoProvider>(
+          builder: (context, escalasProvider, eventosProvider, child) {
+            if (escalasProvider.isLoading) {
+              return ListView.builder(
+                itemCount: 4,
+                itemBuilder: (_, __) => const ShimmerCard(height: 160),
+              );
+            }
+
+            // Atualiza mapa de eventos para uso no AppBar (filtros)
+            _eventosMap = {
+              for (final ev in eventosProvider.eventos)
+                if (ev.id != null) ev.id!: ev,
+            };
+
+            final todas = <Escala>[
+              ...escalasProvider.listarRascunhos(),
+              ...escalasProvider.escalas,
+            ];
+
+            // Aplica filtros: status → avançado
+            final filtradas = _aplicarFiltroAvancado(
+              _filtrarPorStatus(todas),
+              _eventosMap,
             );
-          }
 
-          // Filtro não se aplica a rascunhos
-          final rascunhosAtivos =
-              _eventoRascunhoAtivo != null ? provider.getRascunhos(_eventoRascunhoAtivo!) : <Escala>[];
-          final escalasFiltradas = _filtrarEscalas(provider.escalas);
-          final listaFinal = [...rascunhosAtivos, ...escalasFiltradas];
+            // Separa por aba
+            final proximas = <Escala>[];
+            final passadas = <Escala>[];
 
-          return Column(
-            children: [
-              _buildFiltros(),
+            for (final e in filtradas) {
+              final ev = _eventosMap[e.eventoId];
+              final dt = ev != null ? _parseDataEvento(ev.dataEvento) : null;
+              if (dt == null || !_eventoEhPassado(dt)) {
+                proximas.add(e);
+              } else {
+                passadas.add(e);
+              }
+            }
 
-              // Banner de publicação — exibido quando há rascunhos pendentes
-              if (isLider && _eventoRascunhoAtivo != null && rascunhosAtivos.isNotEmpty)
-                Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.blue.shade200),
+            if (todas.isEmpty) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.event_busy, size: 64, color: Colors.grey[400]),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Nenhuma escala registrada',
+                      style: TextStyle(fontSize: 18, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      isLider ? 'Toque no + para montar um rascunho' : 'Aguarde ser escalado pelo líder',
+                      style: const TextStyle(fontSize: 14, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            return Column(
+              children: [
+                // Banner de filtro ativo
+                if (_filtroAvancado.ativo)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.4),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.filter_list, size: 16),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            _descricaoFiltroAtivo(),
+                            style: const TextStyle(fontSize: 13),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => setState(() => _filtroAvancado.limpar()),
+                          child: const Icon(Icons.close, size: 16),
+                        ),
+                      ],
+                    ),
                   ),
-                  child: Row(
+
+                _buildFiltrosStatus(),
+
+                Expanded(
+                  child: TabBarView(
                     children: [
-                      const Icon(Icons.info_outline, color: Colors.blue),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          '${rascunhosAtivos.length} ${rascunhosAtivos.length == 1 ? "músico aguardando" : "músicos aguardando"} publicação.',
-                          style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.w500),
+                      RefreshIndicator(
+                        onRefresh: _carregarTudo,
+                        child: _buildListaAgrupada(
+                          context: context,
+                          escalas: proximas,
+                          eventosMap: _eventosMap,
+                          isLider: isLider,
+                          currentUserId: currentUserId,
+                          isPassadas: false,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      RefreshIndicator(
+                        onRefresh: _carregarTudo,
+                        child: _buildListaAgrupada(
+                          context: context,
+                          escalas: passadas,
+                          eventosMap: _eventosMap,
+                          isLider: isLider,
+                          currentUserId: currentUserId,
+                          isPassadas: true,
                         ),
-                        icon: const Icon(Icons.send, size: 16),
-                        label: const Text('Publicar'),
-                        onPressed: () => _publicarEscala(context, _eventoRascunhoAtivo!),
                       ),
                     ],
                   ),
                 ),
-
-              Expanded(
-                child: listaFinal.isEmpty
-                    ? Center(
-                        child: Text(
-                          'Nenhuma escala $_filtro',
-                          style: const TextStyle(fontSize: 16, color: Colors.grey),
-                        ),
-                      )
-                    : RefreshIndicator(
-                        onRefresh: _carregarTudo,
-                        child: ListView.builder(
-                          itemCount: listaFinal.length,
-                          itemBuilder: (context, index) {
-                            return _buildEscalaCard(
-                              context,
-                              listaFinal[index],
-                              isLider,
-                              currentUserId,
-                            );
-                          },
-                        ),
-                      ),
-              ),
-            ],
-          );
-        },
+              ],
+            );
+          },
+        ),
       ),
     );
+  }
+
+  // ── descrição textual do filtro ativo (para o banner) ─────────────────────
+
+  String _descricaoFiltroAtivo() {
+    final partes = <String>[];
+    if (_filtroAvancado.ano != null) partes.add('${_filtroAvancado.ano}');
+    if (_filtroAvancado.mes != null) {
+      const nomes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+      partes.add(nomes[_filtroAvancado.mes! - 1]);
+    }
+    if (_filtroAvancado.musicoNome != null) {
+      partes.add(_filtroAvancado.musicoNome!);
+    }
+    if (_filtroAvancado.instrumentoNome != null) {
+      partes.add(_filtroAvancado.instrumentoNome!);
+    }
+    return 'Filtro: ${partes.join(' • ')}';
   }
 }
