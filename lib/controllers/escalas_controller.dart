@@ -11,11 +11,86 @@ class EscalasProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
 
+  // Rascunhos locais por evento — nunca enviados ao backend até publicar
+  final Map<int, List<Escala>> _rascunhosPorEvento = {};
+
   final String apiUrl = AppConstants.escalasEndpoint;
 
   List<Escala> get escalas => _escalas;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+
+  // ── RASCUNHOS ────────────────────────────────────────────────────────────
+
+  List<Escala> getRascunhos(int eventoId) => _rascunhosPorEvento[eventoId] ?? [];
+
+  bool temRascunhos(int eventoId) => (_rascunhosPorEvento[eventoId] ?? []).isNotEmpty;
+
+  void adicionarRascunho(Escala escala) {
+    final lista = List<Escala>.from(_rascunhosPorEvento[escala.eventoId] ?? []);
+    // IDs temporários negativos para diferenciar de registros reais do backend
+    final tempId = -(lista.length + 1);
+    lista.add(Escala(
+      id: tempId,
+      musicoId: escala.musicoId,
+      eventoId: escala.eventoId,
+      musicoNome: escala.musicoNome,
+      eventoNome: escala.eventoNome,
+      instrumentoNoEvento: escala.instrumentoNoEvento,
+      instrumentoNome: escala.instrumentoNome,
+      observacao: escala.observacao,
+    ));
+    _rascunhosPorEvento[escala.eventoId] = lista;
+    notifyListeners();
+  }
+
+  void removerRascunho(int eventoId, int tempId) {
+    _rascunhosPorEvento[eventoId]?.removeWhere((e) => e.id == tempId);
+    notifyListeners();
+  }
+
+  void limparRascunhos(int eventoId) {
+    _rascunhosPorEvento.remove(eventoId);
+    notifyListeners();
+  }
+
+  /// Envia todos os rascunhos do evento para o backend de uma vez.
+  /// As notificações FCM só disparam aqui.
+  Future<bool> publicarEscalas(int eventoId) async {
+    final rascunhos = List<Escala>.from(_rascunhosPorEvento[eventoId] ?? []);
+    if (rascunhos.isEmpty) return false;
+
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      for (final escala in rascunhos) {
+        final response = await ApiService.post(apiUrl, body: escala.toJson());
+        AppLogger.debug('publicarEscalas POST status: ${response.statusCode}');
+
+        if (response.statusCode == 201 || response.statusCode == 200) {
+          final novaEscala = Escala.fromJson(response.data);
+          _escalas.add(novaEscala);
+          AppLogger.info('Escala publicada: ID ${novaEscala.id}');
+        } else {
+          throw _exceptionFromStatus(response.statusCode, 'Falha ao publicar escala');
+        }
+      }
+      _rascunhosPorEvento.remove(eventoId);
+      return true;
+    } catch (e) {
+      final appException = ErrorHandler.handle(e);
+      _errorMessage = appException.message;
+      AppLogger.error('publicarEscalas', e);
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // ── CRUD ─────────────────────────────────────────────────────────────────
 
   Future<void> listarEscalas() async {
     _isLoading = true;

@@ -94,7 +94,6 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
     }
   }
 
-  // --- FUNÇÃO AUXILIAR: Monta o Texto da Escala ---
   String _gerarTextoEscala() {
     final eventoAtual = Provider.of<EventoProvider>(context, listen: false)
         .eventos
@@ -108,32 +107,94 @@ class _EventoDetalhesPageState extends State<EventoDetalhesPage> with SingleTick
     final musicas = eventoAtual.repertorio ?? [];
 
     StringBuffer sb = StringBuffer();
-    sb.writeln('*${eventoAtual.nome}*');
+
+    // ── CABEÇALHO ──────────────────────────────────────────
+    sb.writeln('*${eventoAtual.nome.toUpperCase()}*');
+
+    // Tipo do evento (CULTO, CASAMENTO, etc.)
+    if (eventoAtual.tipo.isNotEmpty) {
+      sb.writeln('🎵 Tipo: ${eventoAtual.tipo}');
+    }
+
+    // Data do evento
     String dataFormatada = eventoAtual.dataEvento.split('T')[0].split('-').reversed.join('/');
-    sb.writeln('🗓 $dataFormatada');
-    sb.writeln('📍 ${eventoAtual.local}');
+    sb.writeln('🗓 Data: $dataFormatada');
+
+    // Horário do evento (se disponível na string ISO)
+    final temHorario = eventoAtual.dataEvento.contains('T');
+    if (temHorario) {
+      final horario = eventoAtual.dataEvento.split('T')[1].substring(0, 5);
+      sb.writeln('🕐 Horário: $horario');
+    }
+
+    sb.writeln('📍 Local: ${eventoAtual.local}');
+
+    // Descrição/observação do evento
+    if (eventoAtual.descricao != null && eventoAtual.descricao!.trim().isNotEmpty) {
+      sb.writeln('📝 ${eventoAtual.descricao}');
+    }
+
     sb.writeln('');
 
+    // ── ENSAIO ─────────────────────────────────────────────
+    if (eventoAtual.dataHoraEnsaio != null) {
+      sb.writeln('*ENSAIO:*');
+      final ensaio = eventoAtual.dataHoraEnsaio!;
+      final diaEnsaio =
+          '${ensaio.day.toString().padLeft(2, '0')}/${ensaio.month.toString().padLeft(2, '0')}/${ensaio.year}';
+      final horaEnsaio = '${ensaio.hour.toString().padLeft(2, '0')}:${ensaio.minute.toString().padLeft(2, '0')}';
+      sb.writeln('📅 $diaEnsaio às $horaEnsaio');
+      sb.writeln('');
+    }
+
+    // ── BANDA ──────────────────────────────────────────────
     sb.writeln('*BANDA:*');
     if (escalasDoEvento.isEmpty) {
       sb.writeln('(Ninguém escalado)');
     } else {
-      for (var escala in escalasDoEvento) {
+      final confirmados = escalasDoEvento.where((e) => e.confirmado).toList();
+      final pendentes = escalasDoEvento.where((e) => !e.confirmado).toList();
+
+      for (var escala in confirmados) {
         final instrumentoNome = _obterNomeInstrumento(escala.instrumentoNoEvento);
-        sb.writeln('▪ ${escala.musicoNome ?? "Músico"} ($instrumentoNome)');
+        sb.writeln('✅ ${escala.musicoNome ?? "Músico"} ($instrumentoNome)');
+      }
+      for (var escala in pendentes) {
+        final instrumentoNome = _obterNomeInstrumento(escala.instrumentoNoEvento);
+        sb.writeln('⏳ ${escala.musicoNome ?? "Músico"} ($instrumentoNome)');
+      }
+
+      // Observações individuais
+      final comObservacao = escalasDoEvento.where((e) => e.observacao != null && e.observacao!.trim().isNotEmpty);
+      if (comObservacao.isNotEmpty) {
+        sb.writeln('');
+        sb.writeln('_Obs:_');
+        for (var escala in comObservacao) {
+          sb.writeln('• ${escala.musicoNome ?? "Músico"}: ${escala.observacao}');
+        }
       }
     }
     sb.writeln('');
 
+    // ── REPERTÓRIO ─────────────────────────────────────────
     sb.writeln('*REPERTÓRIO:*');
     if (musicas.isEmpty) {
       sb.writeln('(A definir)');
     } else {
       for (var i = 0; i < musicas.length; i++) {
-        var m = musicas[i];
-        sb.writeln('${i + 1}. ${m.titulo} - ${m.artistaNome} [${m.tom ?? "?"}]');
+        final m = musicas[i];
+        final tom = m.tom ?? '?';
+        sb.writeln('${i + 1}. *${m.titulo}* - ${m.artistaNome} [Tom: $tom]');
+
+        if (m.linkYoutube != null && m.linkYoutube!.isNotEmpty) {
+          sb.writeln('   🎬 ${m.linkYoutube}');
+        }
       }
     }
+    sb.writeln('');
+
+    // ── RODAPÉ ─────────────────────────────────────────────
+    sb.writeln('_Enviado pelo app SGGM_ 🎶');
 
     return sb.toString();
   }
