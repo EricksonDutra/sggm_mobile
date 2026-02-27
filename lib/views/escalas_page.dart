@@ -553,7 +553,6 @@ class _EscalasPageState extends State<EscalasPage> {
                     Consumer<EventoProvider>(
                       builder: (context, provider, child) {
                         // ✅ Filtra apenas eventos futuros e ordena do mais próximo
-                        final agora = DateTime.now();
                         final eventosFuturos = provider.eventos.where((e) {
                           final dt = _parseDataEvento(e.dataEvento);
                           return dt != null && !_eventoEhPassado(dt);
