@@ -229,8 +229,8 @@ class EscalasProvider extends ChangeNotifier {
     }
   }
 
-  // ✅ CORRIGIDO: substituído reconstrução manual (com instrumentoNoEvento)
-  // por Escala.fromJson (se backend retornar objeto) ou copyWith (fallback)
+// lib/controllers/escalas_controller.dart
+
   Future<bool> confirmarPresenca(int escalaId, bool confirmado) async {
     _isLoading = true;
     _errorMessage = null;
@@ -246,13 +246,28 @@ class EscalasProvider extends ChangeNotifier {
       if (response.statusCode! >= 200 && response.statusCode! <= 299) {
         final index = _escalas.indexWhere((e) => e.id == escalaId);
         if (index != -1) {
-          // Prefere recarregar do backend para garantir consistência;
-          // usa copyWith como fallback seguro se o endpoint não retornar body
-          _escalas[index] = (response.data != null && response.data is Map<String, dynamic>)
-              ? Escala.fromJson(response.data as Map<String, dynamic>)
-              : _escalas[index].copyWith(confirmado: confirmado);
+          // ✅ Tenta parsear o response, mas se falhar usa copyWith local
+          // Evita crash quando backend retorna musico como nome em vez de ID
+          try {
+            if (response.data != null && response.data is Map<String, dynamic>) {
+              _escalas[index] = Escala.fromJson(response.data as Map<String, dynamic>);
+            } else {
+              _escalas[index] = _escalas[index].copyWith(confirmado: confirmado);
+            }
+          } catch (parseError) {
+            // Backend retornou formato inesperado (ex: musico como String)
+            // Atualiza apenas o campo confirmado localmente
+            AppLogger.warning(
+              'confirmarPresenca: response inválido, usando fallback local. '
+              'Erro: $parseError',
+            );
+            _escalas[index] = _escalas[index].copyWith(confirmado: confirmado);
+          }
 
-          AppLogger.info('Presença ${confirmado ? "confirmada" : "desconfirmada"} na escala $escalaId');
+          AppLogger.info(
+            'Presença ${confirmado ? "confirmada" : "desconfirmada"} '
+            'na escala $escalaId',
+          );
         }
         return true;
       } else {
@@ -300,7 +315,19 @@ class EscalasProvider extends ChangeNotifier {
       throw UnknownException(details: 'Formato inesperado: ${data.runtimeType}');
     }
 
-    return resultsList.map((item) => Escala.fromJson(item as Map<String, dynamic>)).toList();
+    // ✅ Filtra itens com musico/evento nulos antes de parsear
+    final validos = resultsList.where((item) {
+      if (item is! Map<String, dynamic>) return false;
+      return item['musico'] != null && item['evento'] != null;
+    }).toList();
+
+    if (validos.length != resultsList.length) {
+      AppLogger.warning(
+        '${resultsList.length - validos.length} escalas ignoradas por dados incompletos',
+      );
+    }
+
+    return validos.map((item) => Escala.fromJson(item as Map<String, dynamic>)).toList();
   }
 
   void limparErro() {
