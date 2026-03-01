@@ -14,10 +14,11 @@ import 'package:sggm/services/notification_service.dart';
 import 'package:sggm/services/secure_token_service.dart';
 import 'package:sggm/services/token_migration_service.dart';
 import 'package:sggm/util/app_logger.dart';
+import 'package:sggm/util/navigation_service.dart';
+import 'package:sggm/views/evento_detalhes_loader_page.dart';
 import 'package:sggm/views/login_page.dart';
 import 'package:sggm/home_page.dart';
 import 'package:sggm/theme/app_theme.dart';
-import 'package:sggm/views/debug/biometric_test_page.dart';
 import 'firebase_options.dart';
 
 void main() async {
@@ -79,6 +80,7 @@ class MyApp extends StatelessWidget {
       child: Consumer<AuthProvider>(
         builder: (context, authProvider, _) {
           return MaterialApp(
+            navigatorKey: NavigationService.navigatorKey,
             title: 'SGGM',
             debugShowCheckedModeBanner: false,
             localizationsDelegates: const [
@@ -96,7 +98,10 @@ class MyApp extends StatelessWidget {
             routes: {
               '/': (context) => const LoginPage(),
               '/home': (context) => const HomePage(),
-              '/biometric_test': (context) => const BiometricTestPage(),
+              '/evento_detalhes': (context) {
+                final eventoId = ModalRoute.of(context)!.settings.arguments as String;
+                return EventoDetalhesLoaderPage(eventoId: eventoId);
+              },
             },
           );
         },
