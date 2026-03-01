@@ -224,27 +224,6 @@ class CifraSecaoWidget extends StatelessWidget {
     );
   }
 
-  List<_BlocoAcorde> _parsearBlocos(String linha) {
-    final regex = RegExp(r'\[([^\]]*)\]([^\[]*)');
-    final blocos = <_BlocoAcorde>[];
-
-    // ✅ Captura texto ANTES do primeiro acorde (ex: "Dign" em "Dign[C]o")
-    final primeiroMatch = regex.firstMatch(linha);
-    if (primeiroMatch != null && primeiroMatch.start > 0) {
-      final textoBefore = linha.substring(0, primeiroMatch.start);
-      if (textoBefore.isNotEmpty) {
-        blocos.add(_BlocoAcorde(acorde: '', silaba: textoBefore));
-      }
-    }
-
-    // Adiciona os blocos normais acorde + sílaba
-    for (final m in regex.allMatches(linha)) {
-      blocos.add(_BlocoAcorde(acorde: m.group(1) ?? '', silaba: m.group(2) ?? ''));
-    }
-
-    return blocos;
-  }
-
   String _labelSecao(TipoSecao tipo) => switch (tipo) {
         TipoSecao.intro => 'INTRO',
         TipoSecao.verso => 'VERSO',
