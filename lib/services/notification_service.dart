@@ -4,6 +4,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'dart:io' show Platform;
 
 import 'package:sggm/util/app_logger.dart';
+import 'package:sggm/util/navigation_service.dart';
+import 'package:sggm/util/notification_router.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -142,7 +144,20 @@ class NotificationService {
     final eventoId = message.data['evento_id'];
     AppLogger.debug('Notificação clicada — tipo: $tipo | eventoId: $eventoId');
 
-    // TODO: Implementar navegação
+    _navegarParaDestino(tipo: tipo, eventoId: eventoId);
+  }
+
+  void _navegarParaDestino({required String? tipo, required String? eventoId}) {
+    final navigator = NavigationService.navigatorKey.currentState;
+
+    if (navigator == null) {
+      AppLogger.warning('Navigator não disponível para navegação via notificação');
+      return;
+    }
+
+    final route = resolveNotificationRoute(tipo: tipo, eventoId: eventoId);
+    AppLogger.debug('Navegando para ${route.route} | args: ${route.arguments}');
+    navigator.pushNamed(route.route, arguments: route.arguments);
   }
 
   Future<void> _showLocalNotification(RemoteMessage message) async {
@@ -171,13 +186,21 @@ class NotificationService {
       message.notification?.title ?? 'Nova Notificação',
       message.notification?.body ?? '',
       details,
-      payload: message.data.toString(),
+      payload: '${message.data['tipo']}|${message.data['evento_id'] ?? ''}',
     );
   }
 
   void _onNotificationTapped(NotificationResponse response) {
-    AppLogger.debug('Notificação local clicada');
-    // TODO: Implementar navegação baseada no payload
+    AppLogger.debug('Notificação local clicada — payload: ${response.payload}');
+
+    final payload = response.payload;
+    if (payload == null || payload.isEmpty) return;
+
+    final parts = payload.split('|');
+    final tipo = parts.isNotEmpty ? parts[0] : null;
+    final eventoId = parts.length > 1 && parts[1].isNotEmpty ? parts[1] : null;
+
+    _navegarParaDestino(tipo: tipo, eventoId: eventoId);
   }
 
   Future<void> cancelAllNotifications() async {
