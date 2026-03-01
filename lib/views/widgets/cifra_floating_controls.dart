@@ -8,8 +8,7 @@ class CifraFloatingControls extends StatefulWidget {
   final VoidCallback onToggleScroll;
   final VoidCallback onFonteMais;
   final VoidCallback onFonteMenos;
-  final VoidCallback onVelocidadeMais;
-  final VoidCallback onVelocidadeMenos;
+  final ValueChanged<double> onVelocidadeChanged;
 
   const CifraFloatingControls({
     super.key,
@@ -18,8 +17,7 @@ class CifraFloatingControls extends StatefulWidget {
     required this.onToggleScroll,
     required this.onFonteMais,
     required this.onFonteMenos,
-    required this.onVelocidadeMais,
-    required this.onVelocidadeMenos,
+    required this.onVelocidadeChanged,
   });
 
   @override
@@ -312,12 +310,33 @@ class _CifraFloatingControlsState extends State<CifraFloatingControls> with Sing
       children: [
         const SizedBox(height: 10),
         _buildLabel(Icons.speed, 'Velocidade'),
-        _buildControlRow(
-          valor: '${widget.config.velocidade.toInt()}',
-          onMenos: widget.onVelocidadeMenos,
-          onMais: widget.onVelocidadeMais,
-          iconMenos: Icons.remove,
-          iconMais: Icons.add,
+        const SizedBox(height: 2),
+        Row(
+          children: [
+            const Icon(Icons.directions_walk, size: 14, color: Colors.white38),
+            Expanded(
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  activeTrackColor: AppTheme.presbyterianoVerde,
+                  inactiveTrackColor: AppTheme.presbyterianoVerde.withValues(alpha: 0.2),
+                  thumbColor: AppTheme.presbyterianoVerdeClaro,
+                  overlayColor: AppTheme.presbyterianoVerde.withValues(alpha: 0.15),
+                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+                  trackHeight: 3,
+                ),
+                child: Slider(
+                  value: widget.config.velocidade,
+                  min: CifraScrollConfig.velocidadeMin, // 10.0
+                  max: CifraScrollConfig.velocidadeMax, // 250.0
+                  divisions: ((CifraScrollConfig.velocidadeMax - CifraScrollConfig.velocidadeMin) /
+                          CifraScrollConfig.velocidadeStep) // (250-10)/10 = 24 divisões
+                      .round(),
+                  onChanged: widget.onVelocidadeChanged,
+                ),
+              ),
+            ),
+            const Icon(Icons.directions_run, size: 14, color: Colors.white38),
+          ],
         ),
       ],
     );
