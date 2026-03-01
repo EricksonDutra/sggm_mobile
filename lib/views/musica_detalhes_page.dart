@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:sggm/models/musicas.dart';
 import 'package:sggm/theme/app_theme.dart';
@@ -45,6 +47,10 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
 
   late ModoCifra _modoCifra;
 
+  // ── Pause-on-touch ─────────────────────────────────────────────────────────
+  bool _usuarioInteragindo = false; // ✅ era final, não podia ser alterado
+  Timer? _retomadaTimer;
+
   @override
   void initState() {
     super.initState();
@@ -56,6 +62,7 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
 
   @override
   void dispose() {
+    _retomadaTimer?.cancel();
     _youtubeController?.dispose();
     _tabController.dispose();
     _scrollController.dispose();
@@ -73,10 +80,11 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
   }
 
   void _initTabController() {
-    final tabCount = [_hasYoutube, _hasCifra].where((v) => v).length;
+    final tabCount = [_hasCifra, _hasYoutube].where((v) => v).length;
     _tabController = TabController(
       length: tabCount > 0 ? tabCount : 1,
       vsync: this,
+      initialIndex: 0, // cifra sempre primeiro
     );
   }
 
@@ -94,8 +102,6 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
     );
   }
 
-  /// Inicializa a WebView apenas se não há cifra nativa (eager)
-  /// ou de forma lazy quando o usuário trocar para o modo web.
   void _initWebViewSeNecessario() {
     if (_hasCifraWeb && !_hasCifraNativa) {
       _initializeWebView();
@@ -142,7 +148,7 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Lógica de transposição
+  // Transposição
   // ─────────────────────────────────────────────────────────────────────────
 
   static const _tons = [
@@ -179,7 +185,7 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Lógica de auto-scroll
+  // Auto-scroll
   // ─────────────────────────────────────────────────────────────────────────
 
   void _toggleAutoScroll() {
@@ -189,7 +195,7 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
 
   Future<void> _iniciarAutoScroll() async {
     while (_autoScrollAtivo && mounted) {
-      if (_scrollController.hasClients) {
+      if (!_usuarioInteragindo && _scrollController.hasClients) {
         final maxExtent = _scrollController.position.maxScrollExtent;
         final atual = _scrollController.offset;
 
@@ -271,8 +277,8 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
     return TabBar(
       controller: _tabController,
       tabs: [
-        if (_hasYoutube) const Tab(icon: Icon(Icons.play_circle), text: 'Vídeo'),
         if (_hasCifra) const Tab(icon: Icon(Icons.music_note), text: 'Cifra'),
+        if (_hasYoutube) const Tab(icon: Icon(Icons.play_circle), text: 'Vídeo'),
       ],
     );
   }
@@ -282,8 +288,8 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
       controller: _tabController,
       physics: const NeverScrollableScrollPhysics(),
       children: [
-        if (_hasYoutube) _buildYoutubeTab(),
         if (_hasCifra) _buildCifraTab(),
+        if (_hasYoutube) _buildYoutubeTab(),
       ],
     );
   }
@@ -356,11 +362,9 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
   // ─────────────────────────────────────────────────────────────────────────
 
   Widget _buildCifraTab() {
-    // Apenas uma opção disponível — abre direto sem seletor
     if (_hasCifraNativa && !_hasCifraWeb) return _buildCifraNativa();
     if (!_hasCifraNativa && _hasCifraWeb) return _buildCifraWebView();
 
-    // Ambas disponíveis — exibe seletor
     return Column(
       children: [
         _buildSeletorModoCifra(),
@@ -370,8 +374,6 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
       ],
     );
   }
-
-  // ── Seletor local / web ────────────────────────────────────────────────────
 
   Widget _buildSeletorModoCifra() {
     return Container(
@@ -422,11 +424,7 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              size: 14,
-              color: selecionado ? Colors.white : Colors.white54,
-            ),
+            Icon(icon, size: 14, color: selecionado ? Colors.white : Colors.white54),
             const SizedBox(width: 5),
             Text(
               label,
@@ -443,7 +441,7 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Cifra nativa (ChordPro)
+  // Cifra nativa
   // ─────────────────────────────────────────────────────────────────────────
 
   Widget _buildCifraNativa() {
@@ -455,11 +453,59 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
 
     return Stack(
       children: [
-        Column(
-          children: [
-            _buildBarraTom(),
-            Expanded(child: _buildConteudoCifra(secoes)),
-          ],
+        Listener(
+          onPointerDown: (_) {
+            if (_autoScrollAtivo) {
+              _retomadaTimer?.cancel();
+              setState(() => _usuarioInteragindo = true);
+            }
+          },
+          onPointerUp: (_) {
+            if (_autoScrollAtivo) {
+              _retomadaTimer = Timer(const Duration(seconds: 2), () {
+                if (mounted) {
+                  setState(() => _usuarioInteragindo = false);
+                }
+              });
+            }
+          },
+          child: CustomScrollView(
+            controller: _scrollController,
+            slivers: [
+              // Barra de tom — some ao rolar, volta ao puxar
+              SliverAppBar(
+                automaticallyImplyLeading: false,
+                backgroundColor: const Color(0xFF1E1E1E),
+                pinned: false,
+                floating: true,
+                snap: true,
+                toolbarHeight: 44,
+                flexibleSpace: FlexibleSpaceBar(
+                  collapseMode: CollapseMode.pin,
+                  background: _buildBarraTom(),
+                ),
+              ),
+
+              // Conteúdo da cifra
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 72, 80),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ...secoes.map(
+                        (s) => CifraSecaoWidget(
+                          secao: s,
+                          fontSize: _scrollConfig.fontSize,
+                        ),
+                      ),
+                      const SizedBox(height: 80),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
         _buildControlesFixos(),
       ],
@@ -530,22 +576,6 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
     );
   }
 
-  Widget _buildConteudoCifra(List<dynamic> secoes) {
-    return SingleChildScrollView(
-      controller: _scrollController,
-      padding: const EdgeInsets.fromLTRB(16, 16, 72, 80),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ...secoes.map(
-            (s) => CifraSecaoWidget(secao: s, fontSize: _scrollConfig.fontSize),
-          ),
-          const SizedBox(height: 80),
-        ],
-      ),
-    );
-  }
-
   Widget _buildControlesFixos() {
     return CifraFloatingControls(
       config: _scrollConfig,
@@ -553,8 +583,8 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
       onToggleScroll: _toggleAutoScroll,
       onFonteMais: () => setState(() => _scrollConfig = _scrollConfig.aumentarFonte()),
       onFonteMenos: () => setState(() => _scrollConfig = _scrollConfig.diminuirFonte()),
-      onVelocidadeMais: () => setState(() => _scrollConfig = _scrollConfig.aumentarVelocidade()),
-      onVelocidadeMenos: () => setState(() => _scrollConfig = _scrollConfig.diminuirVelocidade()),
+      // ✅ slider — substitui onVelocidadeMais/onVelocidadeMenos
+      onVelocidadeChanged: (v) => setState(() => _scrollConfig = _scrollConfig.comVelocidade(v)),
     );
   }
 
