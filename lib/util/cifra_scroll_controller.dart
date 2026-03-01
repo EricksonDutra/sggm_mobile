@@ -1,7 +1,7 @@
 class CifraScrollConfig {
   static const double velocidadePadrao = 130.0;
   static const double velocidadeMin = 10.0;
-  static const double velocidadeMax = 250.0;
+  static const double velocidadeMax = 650.0;
   static const double velocidadeStep = 10.0;
 
   static const double fontSizePadrao = 16.0;
@@ -17,6 +17,8 @@ class CifraScrollConfig {
     this.fontSize = fontSizePadrao,
   });
 
+  // ── Fonte ──────────────────────────────────────────────────────────────────
+
   CifraScrollConfig aumentarFonte() => CifraScrollConfig(
         velocidade: velocidade,
         fontSize: (fontSize + fontSizeStep).clamp(fontSizeMin, fontSizeMax),
@@ -27,6 +29,8 @@ class CifraScrollConfig {
         fontSize: (fontSize - fontSizeStep).clamp(fontSizeMin, fontSizeMax),
       );
 
+  // ── Velocidade (botões) ────────────────────────────────────────────────────
+
   CifraScrollConfig aumentarVelocidade() => CifraScrollConfig(
         velocidade: (velocidade + velocidadeStep).clamp(velocidadeMin, velocidadeMax),
         fontSize: fontSize,
@@ -34,6 +38,13 @@ class CifraScrollConfig {
 
   CifraScrollConfig diminuirVelocidade() => CifraScrollConfig(
         velocidade: (velocidade - velocidadeStep).clamp(velocidadeMin, velocidadeMax),
+        fontSize: fontSize,
+      );
+
+  // ── Velocidade (slider) ────────────────────────────────────────────────────
+
+  CifraScrollConfig comVelocidade(double v) => CifraScrollConfig(
+        velocidade: v.clamp(velocidadeMin, velocidadeMax),
         fontSize: fontSize,
       );
 }

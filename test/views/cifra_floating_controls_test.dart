@@ -15,8 +15,7 @@ void main() {
               onToggleScroll: () {},
               onFonteMais: () {},
               onFonteMenos: () {},
-              onVelocidadeMais: () {},
-              onVelocidadeMenos: () {},
+              onVelocidadeChanged: (_) {}, // ✅
             ),
           ]),
         ),
@@ -36,8 +35,7 @@ void main() {
               onToggleScroll: () {},
               onFonteMais: () {},
               onFonteMenos: () {},
-              onVelocidadeMais: () {},
-              onVelocidadeMenos: () {},
+              onVelocidadeChanged: (_) {}, // ✅
             ),
           ]),
         ),
@@ -61,8 +59,7 @@ void main() {
               onToggleScroll: () {},
               onFonteMais: () {},
               onFonteMenos: () {},
-              onVelocidadeMais: () {},
-              onVelocidadeMenos: () {},
+              onVelocidadeChanged: (_) {}, // ✅
             ),
           ]),
         ),
