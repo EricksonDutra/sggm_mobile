@@ -38,7 +38,7 @@ jobs:
 
       # ✅ Gera o firebase_options.dart a partir da secret
       - name: Criar firebase_options.dart
-        run: echo "${{ secrets.FIREBASE_OPTIONS }}" > lib/firebase_options.dart
+        run: echo "${{ secrets.FIREBASE_OPTIONS }}" | base64 -d > lib/firebase_options.dart
 
       # BASE_URL é passado via --dart-define
       # Cadastre em: Settings → Secrets and variables → Actions → New repository secret
