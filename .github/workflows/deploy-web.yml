@@ -1,0 +1,69 @@
+name: Deploy Flutter Web → GitHub Pages
+
+on:
+  push:
+    branches:
+      - main          # dispara automaticamente a cada push na main
+  workflow_dispatch:  # permite rodar manualmente pela aba Actions
+
+# Permissões necessárias para publicar no GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Evita deploys simultâneos; cancela o anterior se um novo chegar
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Flutter Web
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Flutter 3.24.4
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.24.4"
+          channel: stable
+          cache: true
+
+      - name: Instalar dependências
+        run: flutter pub get
+
+      # BASE_URL é passado via --dart-define
+      # Cadastre em: Settings → Secrets and variables → Actions → New repository secret
+      - name: Build Web (release)
+        run: |
+          flutter build web \
+            --release \
+            --base-href "/sggm_mobile/" \
+            --dart-define=BASE_URL=${{ secrets.BASE_URL }} \
+            --dart-define=TIMEOUT_SECONDS=10
+
+      - name: Configurar GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact para Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    name: Deploy para GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

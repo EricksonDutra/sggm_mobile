@@ -1,7 +1,9 @@
 // lib/services/notification_service.dart
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
+
+import 'package:flutter_local_notifications/flutter_local_notifications.dart'
+    if (dart.library.html) 'package:sggm/services/stub_local_notifications.dart';
 
 import 'package:sggm/util/app_logger.dart';
 import 'package:sggm/util/navigation_service.dart';
@@ -10,10 +12,12 @@ import 'package:sggm/util/notification_router.dart';
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
-  NotificationService._internal();
+  NotificationService._internal(); // construtor vazio — sem acesso ao Firebase aqui
 
-  final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
-  final FlutterLocalNotificationsPlugin _flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+  // LAZY: getter em vez de field final — só acessa após Firebase.initializeApp()
+  FirebaseMessaging get _firebaseMessaging => FirebaseMessaging.instance;
+
+  FlutterLocalNotificationsPlugin? _localNotifications;
 
   String? _fcmToken;
   String? get fcmToken => _fcmToken;
@@ -22,7 +26,12 @@ class NotificationService {
     AppLogger.debug('Inicializando notificações...');
 
     await _requestPermission();
-    await _setupLocalNotifications();
+
+    if (!kIsWeb) {
+      _localNotifications = FlutterLocalNotificationsPlugin();
+      await _setupLocalNotifications();
+    }
+
     await _getFCMToken();
     _setupMessageHandlers();
 
@@ -30,30 +39,32 @@ class NotificationService {
   }
 
   Future<void> _requestPermission() async {
-    final settings = await _firebaseMessaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-      provisional: false,
-    );
+    try {
+      final settings = await _firebaseMessaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+        provisional: false,
+      );
 
-    switch (settings.authorizationStatus) {
-      case AuthorizationStatus.authorized:
-        AppLogger.info('Permissão de notificação concedida');
-        break;
-      case AuthorizationStatus.provisional:
-        AppLogger.warning('Permissão de notificação provisória concedida');
-        break;
-      default:
-        AppLogger.warning('Permissão de notificação negada');
+      switch (settings.authorizationStatus) {
+        case AuthorizationStatus.authorized:
+          AppLogger.info('Permissão de notificação concedida');
+          break;
+        case AuthorizationStatus.provisional:
+          AppLogger.warning('Permissão de notificação provisória concedida');
+          break;
+        default:
+          AppLogger.warning('Permissão de notificação negada');
+      }
+    } catch (e) {
+      AppLogger.warning('Permissão de notificação não disponível: $e');
     }
   }
 
   Future<String?> _getFCMToken() async {
     try {
-      if (Platform.isIOS || Platform.isAndroid) {
-        _fcmToken = await _firebaseMessaging.getToken();
-      }
+      _fcmToken = await _firebaseMessaging.getToken();
 
       if (_fcmToken != null) {
         AppLogger.debug('FCM Token obtido com sucesso');
@@ -73,7 +84,6 @@ class NotificationService {
       AppLogger.debug('Usando FCM Token em cache');
       return _fcmToken;
     }
-
     AppLogger.debug('Buscando novo FCM Token...');
     return await _getFCMToken();
   }
@@ -92,6 +102,8 @@ class NotificationService {
   }
 
   Future<void> _setupLocalNotifications() async {
+    if (_localNotifications == null) return;
+
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
@@ -104,7 +116,7 @@ class NotificationService {
       iOS: iosSettings,
     );
 
-    await _flutterLocalNotificationsPlugin.initialize(
+    await _localNotifications!.initialize(
       initSettings,
       onDidReceiveNotificationResponse: _onNotificationTapped,
     );
@@ -118,7 +130,7 @@ class NotificationService {
       playSound: true,
     );
 
-    await _flutterLocalNotificationsPlugin
+    await _localNotifications!
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(androidChannel);
   }
@@ -136,31 +148,30 @@ class NotificationService {
     AppLogger.debug(
       'Mensagem recebida em foreground — título: ${message.notification?.title}',
     );
-    await _showLocalNotification(message);
+    if (!kIsWeb) await _showLocalNotification(message);
   }
 
   void _handleBackgroundMessage(RemoteMessage message) {
     final tipo = message.data['tipo'];
     final eventoId = message.data['evento_id'];
     AppLogger.debug('Notificação clicada — tipo: $tipo | eventoId: $eventoId');
-
     _navegarParaDestino(tipo: tipo, eventoId: eventoId);
   }
 
   void _navegarParaDestino({required String? tipo, required String? eventoId}) {
     final navigator = NavigationService.navigatorKey.currentState;
-
     if (navigator == null) {
       AppLogger.warning('Navigator não disponível para navegação via notificação');
       return;
     }
-
     final route = resolveNotificationRoute(tipo: tipo, eventoId: eventoId);
     AppLogger.debug('Navegando para ${route.route} | args: ${route.arguments}');
     navigator.pushNamed(route.route, arguments: route.arguments);
   }
 
   Future<void> _showLocalNotification(RemoteMessage message) async {
+    if (kIsWeb || _localNotifications == null) return;
+
     const androidDetails = AndroidNotificationDetails(
       'sggm_channel',
       'SGGM Notificações',
@@ -181,7 +192,7 @@ class NotificationService {
 
     const details = NotificationDetails(android: androidDetails, iOS: iosDetails);
 
-    await _flutterLocalNotificationsPlugin.show(
+    await _localNotifications!.show(
       DateTime.now().millisecond,
       message.notification?.title ?? 'Nova Notificação',
       message.notification?.body ?? '',
@@ -192,24 +203,23 @@ class NotificationService {
 
   void _onNotificationTapped(NotificationResponse response) {
     AppLogger.debug('Notificação local clicada — payload: ${response.payload}');
-
     final payload = response.payload;
     if (payload == null || payload.isEmpty) return;
-
     final parts = payload.split('|');
     final tipo = parts.isNotEmpty ? parts[0] : null;
     final eventoId = parts.length > 1 && parts[1].isNotEmpty ? parts[1] : null;
-
     _navegarParaDestino(tipo: tipo, eventoId: eventoId);
   }
 
   Future<void> cancelAllNotifications() async {
-    await _flutterLocalNotificationsPlugin.cancelAll();
+    if (kIsWeb || _localNotifications == null) return;
+    await _localNotifications!.cancelAll();
     AppLogger.info('Todas as notificações canceladas');
   }
 
   Future<void> cancelNotification(int id) async {
-    await _flutterLocalNotificationsPlugin.cancel(id);
+    if (kIsWeb || _localNotifications == null) return;
+    await _localNotifications!.cancel(id);
     AppLogger.info('Notificação ID $id cancelada');
   }
 }

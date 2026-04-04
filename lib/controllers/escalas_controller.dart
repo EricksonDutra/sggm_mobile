@@ -34,7 +34,6 @@ class EscalasProvider extends ChangeNotifier {
   /// Retorna total de rascunhos pendentes (útil para badge no AppBar).
   int get totalRascunhosPendentes => listarRascunhos().length;
 
-  // ✅ CORRIGIDO: removido 'instrumentoNoEvento', usa copyWith + _proximoIdRascunho
   void adicionarRascunho(Escala escala) {
     final lista = _rascunhosPorEvento.putIfAbsent(escala.eventoId, () => []);
     lista.add(escala.copyWith(id: _proximoIdRascunho--));
@@ -229,7 +228,18 @@ class EscalasProvider extends ChangeNotifier {
     }
   }
 
-// lib/controllers/escalas_controller.dart
+  void _atualizarEscalaLocalOuFallback(int index, dynamic responseData, bool confirmado) {
+    try {
+      if (responseData is Map<String, dynamic>) {
+        _escalas[index] = Escala.fromJson(responseData);
+      } else {
+        _escalas[index] = _escalas[index].copyWith(confirmado: confirmado);
+      }
+    } catch (parseError) {
+      AppLogger.warning('Resposta inválida ao confirmar presença, usando fallback local. Erro: $parseError');
+      _escalas[index] = _escalas[index].copyWith(confirmado: confirmado);
+    }
+  }
 
   Future<bool> confirmarPresenca(int escalaId, bool confirmado) async {
     _isLoading = true;
@@ -246,27 +256,9 @@ class EscalasProvider extends ChangeNotifier {
       if (response.statusCode! >= 200 && response.statusCode! <= 299) {
         final index = _escalas.indexWhere((e) => e.id == escalaId);
         if (index != -1) {
-          // ✅ Tenta parsear o response, mas se falhar usa copyWith local
-          // Evita crash quando backend retorna musico como nome em vez de ID
-          try {
-            if (response.data != null && response.data is Map<String, dynamic>) {
-              _escalas[index] = Escala.fromJson(response.data as Map<String, dynamic>);
-            } else {
-              _escalas[index] = _escalas[index].copyWith(confirmado: confirmado);
-            }
-          } catch (parseError) {
-            // Backend retornou formato inesperado (ex: musico como String)
-            // Atualiza apenas o campo confirmado localmente
-            AppLogger.warning(
-              'confirmarPresenca: response inválido, usando fallback local. '
-              'Erro: $parseError',
-            );
-            _escalas[index] = _escalas[index].copyWith(confirmado: confirmado);
-          }
-
+          _atualizarEscalaLocalOuFallback(index, response.data, confirmado);
           AppLogger.info(
-            'Presença ${confirmado ? "confirmada" : "desconfirmada"} '
-            'na escala $escalaId',
+            'Presença ${confirmado ? "confirmada" : "desconfirmada"} na escala $escalaId',
           );
         }
         return true;
@@ -315,10 +307,9 @@ class EscalasProvider extends ChangeNotifier {
       throw UnknownException(details: 'Formato inesperado: ${data.runtimeType}');
     }
 
-    // ✅ Filtra itens com musico/evento nulos antes de parsear
-    final validos = resultsList.where((item) {
-      if (item is! Map<String, dynamic>) return false;
-      return item['musico'] != null && item['evento'] != null;
+    final validos = resultsList.where((escalaJson) {
+      if (escalaJson is! Map<String, dynamic>) return false;
+      return escalaJson['musico'] != null && escalaJson['evento'] != null;
     }).toList();
 
     if (validos.length != resultsList.length) {

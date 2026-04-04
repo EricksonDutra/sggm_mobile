@@ -103,7 +103,7 @@ class AuthProvider extends ChangeNotifier {
 
   Future<bool> login(String username, String password) async {
     _isLoading = true;
-    _errorMessage = null; // ✅ CORREÇÃO 1: limpa erro anterior a cada tentativa
+    _errorMessage = null;
     notifyListeners();
 
     try {
@@ -127,21 +127,21 @@ class AuthProvider extends ChangeNotifier {
       AppLogger.debug('Login status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
-        final data = response.data;
+        final loginResponse = response.data;
 
-        _token = data['access'];
-        _refreshToken = data['refresh'];
-        _isLider = data['is_lider'] ?? false;
-        _isAdmin = data['is_admin'] ?? false;
+        _token = loginResponse['access'];
+        _refreshToken = loginResponse['refresh'];
+        _isLider = loginResponse['is_lider'] ?? false;
+        _isAdmin = loginResponse['is_admin'] ?? false;
         _isAuthenticated = true;
 
         _userData = {
           'refresh': _refreshToken,
-          'musico_id': data['musico_id'],
-          'nome': data['nome'],
-          'username': data['username'],
-          'email': data['email'],
-          'tipo_usuario': data['tipo_usuario'],
+          'musico_id': loginResponse['musico_id'],
+          'nome': loginResponse['nome'],
+          'username': loginResponse['username'],
+          'email': loginResponse['email'],
+          'tipo_usuario': loginResponse['tipo_usuario'],
           'is_lider': _isLider,
           'is_admin': _isAdmin,
         };
@@ -150,11 +150,11 @@ class AuthProvider extends ChangeNotifier {
           token: _token!,
           refreshToken: _refreshToken,
           isLider: _isLider,
-          musicoId: data['musico_id'] ?? 0,
-          tipoUsuario: data['tipo_usuario'] ?? 'MUSICO',
-          nome: data['nome'],
-          username: data['username'],
-          email: data['email'],
+          musicoId: loginResponse['musico_id'] ?? 0,
+          tipoUsuario: loginResponse['tipo_usuario'] ?? 'MUSICO',
+          nome: loginResponse['nome'],
+          username: loginResponse['username'],
+          email: loginResponse['email'],
         );
 
         AppLogger.info('Login realizado com sucesso');
@@ -165,7 +165,6 @@ class AuthProvider extends ChangeNotifier {
         return true;
       }
 
-      // ✅ CORREÇÃO 2: status não-200 (401, 403, etc.) agora popula _errorMessage
       AppLogger.warning('Erro no login: ${response.statusCode}');
       final appException = ErrorHandler.handle(
         DioException(
@@ -179,7 +178,6 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     } catch (e) {
-      // ✅ CORREÇÃO 3: um único catch trata DioException de rede e demais erros
       final appException = ErrorHandler.handle(e);
       _errorMessage = appException.message;
       AppLogger.error('login exception', e);
@@ -393,81 +391,11 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  bool isTokenValid() {
-    if (_token == null) return false;
-    try {
-      final parts = _token!.split('.');
-      if (parts.length != 3) return false;
-
-      final payload = json.decode(
-        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
-      );
-
-      final exp = payload['exp'] as int?;
-      if (exp == null) return false;
-
-      final expirationDate = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
-      return DateTime.now().isBefore(
-        expirationDate.subtract(const Duration(seconds: 30)),
-      );
-    } catch (e) {
-      AppLogger.error('Erro ao validar token', e);
-      return false;
-    }
-  }
-
-  int? getTokenExpirationMinutes() {
+  Map<String, dynamic>? _decodeTokenPayload() {
     if (_token == null) return null;
     try {
       final parts = _token!.split('.');
       if (parts.length != 3) return null;
-
-      final payload = json.decode(
-        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
-      );
-
-      final exp = payload['exp'] as int?;
-      if (exp == null) return null;
-
-      final expirationDate = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
-      final now = DateTime.now();
-
-      if (expirationDate.isBefore(now)) return 0;
-      return expirationDate.difference(now).inMinutes;
-    } catch (e) {
-      AppLogger.error('Erro ao calcular expiração do token', e);
-      return null;
-    }
-  }
-
-  String? getTokenExpirationDate() {
-    if (_token == null) return null;
-    try {
-      final parts = _token!.split('.');
-      if (parts.length != 3) return null;
-
-      final payload = json.decode(
-        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
-      );
-
-      final exp = payload['exp'] as int?;
-      if (exp == null) return null;
-
-      final expirationDate = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
-      return '${expirationDate.day}/${expirationDate.month}/${expirationDate.year} '
-          '${expirationDate.hour}:${expirationDate.minute.toString().padLeft(2, '0')}';
-    } catch (e) {
-      AppLogger.error('Erro ao obter data de expiração do token', e);
-      return null;
-    }
-  }
-
-  Map<String, dynamic>? getTokenPayload() {
-    if (_token == null) return null;
-    try {
-      final parts = _token!.split('.');
-      if (parts.length != 3) return null;
-
       return json.decode(
         utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
       );
@@ -476,6 +404,38 @@ class AuthProvider extends ChangeNotifier {
       return null;
     }
   }
+
+  bool isTokenValid() {
+    final payload = _decodeTokenPayload();
+    if (payload == null) return false;
+    final exp = payload['exp'] as int?;
+    if (exp == null) return false;
+    final expirationDate = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
+    return DateTime.now().isBefore(expirationDate.subtract(const Duration(seconds: 30)));
+  }
+
+  int? getTokenExpirationMinutes() {
+    final payload = _decodeTokenPayload();
+    if (payload == null) return null;
+    final exp = payload['exp'] as int?;
+    if (exp == null) return null;
+    final expirationDate = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
+    final now = DateTime.now();
+    if (expirationDate.isBefore(now)) return 0;
+    return expirationDate.difference(now).inMinutes;
+  }
+
+  String? getTokenExpirationDate() {
+    final payload = _decodeTokenPayload();
+    if (payload == null) return null;
+    final exp = payload['exp'] as int?;
+    if (exp == null) return null;
+    final expirationDate = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
+    return '${expirationDate.day}/${expirationDate.month}/${expirationDate.year} '
+        '${expirationDate.hour}:${expirationDate.minute.toString().padLeft(2, '0')}';
+  }
+
+  Map<String, dynamic>? getTokenPayload() => _decodeTokenPayload();
 
   void limparErro() {
     _errorMessage = null;
