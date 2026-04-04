@@ -301,7 +301,7 @@ class _PerfilEditPageState extends State<PerfilEditPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     DropdownButtonFormField<int>(
-                      initialValue: _instrumentoSelecionado,
+                      value: _instrumentoSelecionado,
                       decoration: InputDecoration(
                         labelText: 'Instrumento Principal',
                         border: const OutlineInputBorder(),

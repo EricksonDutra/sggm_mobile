@@ -108,7 +108,7 @@ class _MusicosPageState extends State<MusicosPage> {
                           contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                         ),
                         isExpanded: true,
-                        initialValue: instrumentoSelecionadoId,
+                        value: instrumentoSelecionadoId,
                         items: [
                           ...provider.instrumentos.map((instrumento) {
                             return DropdownMenuItem<int>(
