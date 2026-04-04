@@ -363,7 +363,7 @@ class _PerfilEditPageState extends State<PerfilEditPage> {
             ),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
-              initialValue: _statusSelecionado,
+              value: _statusSelecionado,
               decoration: const InputDecoration(border: OutlineInputBorder()),
               items: [
                 const DropdownMenuItem(value: 'ATIVO', child: Text('Ativo')),
