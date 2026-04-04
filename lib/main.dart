@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb; // ✅ adicionado
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -60,12 +61,17 @@ class MyApp extends StatelessWidget {
 
             authProvider.loadSavedAuth();
 
-            NotificationService().onTokenRefresh((newToken) {
-              AppLogger.debug('Token FCM atualizado pelo Firebase');
-              if (authProvider.isAuthenticated) {
-                authProvider.reenviarFCMToken();
-              }
-            });
+            // ✅ onTokenRefresh só registrado em mobile
+            // Na web, FirebaseMessaging não está totalmente inicializado
+            // neste ponto e causaria crash com FirebaseException
+            if (!kIsWeb) {
+              NotificationService().onTokenRefresh((newToken) {
+                AppLogger.debug('Token FCM atualizado pelo Firebase');
+                if (authProvider.isAuthenticated) {
+                  authProvider.reenviarFCMToken();
+                }
+              });
+            }
 
             return authProvider;
           },
