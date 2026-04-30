@@ -29,7 +29,7 @@ class EscalaTextoBuilder {
     // Ensaio
     if (evento.dataHoraEnsaio != null) {
       sb.writeln('*ENSAIO:*');
-      sb.writeln('📅 ${DateFormatter.dataHora(evento.dataHoraEnsaio!)}');
+      sb.writeln('📅 ${DateFormatter.dataHoraFromDateTime(evento.dataHoraEnsaio!)}');
       sb.writeln('');
     }
 

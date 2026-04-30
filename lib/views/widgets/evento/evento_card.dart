@@ -40,7 +40,7 @@ class EventoCard extends StatelessWidget {
                 const Icon(Icons.event_available, size: 14, color: Colors.grey),
                 const SizedBox(width: 4),
                 Text(
-                  'Ensaio: ${DateFormatter.dataHora(evento.dataHoraEnsaio!)}',
+                  'Ensaio: ${DateFormatter.dataHoraFromDateTime(evento.dataHoraEnsaio!)}',
                   style: const TextStyle(fontSize: 12, color: Colors.grey),
                 ),
               ]),

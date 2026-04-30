@@ -1,4 +1,3 @@
-// ignore_for_file: use_build_context_synchronously
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sggm/controllers/eventos_controller.dart';
@@ -194,7 +193,10 @@ class _EventoFormDialogContentState extends State<_EventoFormDialogContent> {
                   border: OutlineInputBorder(),
                   suffixIcon: Icon(Icons.calendar_today),
                 ),
-                child: Text(DateFormatter.data(_dataSelecionada), style: const TextStyle(fontSize: 16)),
+                child: Text(
+                  DateFormatter.fromDateTime(_dataSelecionada),
+                  style: const TextStyle(fontSize: 16),
+                ),
               ),
             ),
             const SizedBox(height: 12),
@@ -233,7 +235,7 @@ class _EventoFormDialogContentState extends State<_EventoFormDialogContent> {
                 ),
                 child: Text(
                   _dataHoraEnsaio != null
-                      ? DateFormatter.dataHora(_dataHoraEnsaio!)
+                      ? '${DateFormatter.fromDateTime(_dataHoraEnsaio!)} às ${DateFormatter.hora(_dataHoraEnsaio!)}'
                       : 'Toque para selecionar (opcional)',
                   style: TextStyle(
                     color: _dataHoraEnsaio != null ? Colors.white : Colors.grey[500],

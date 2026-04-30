@@ -32,4 +32,6 @@ class DateFormatter {
     if (dt == null) return raw;
     return '${fromDateTime(dt)} às ${hora(dt)}';
   }
+
+  static String dataHoraFromDateTime(DateTime dt) => '${fromDateTime(dt)} às ${hora(dt)}';
 }
