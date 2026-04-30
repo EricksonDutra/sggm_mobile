@@ -4,11 +4,13 @@ import 'package:sggm/core/errors/error_handler.dart';
 import 'package:sggm/models/instrumentos.dart';
 import 'package:sggm/services/api_service.dart';
 import 'package:sggm/util/app_logger.dart';
+import 'package:sggm/util/constants.dart';
 
 class InstrumentosProvider extends ChangeNotifier {
   List<Instrumento> _instrumentos = [];
   bool _isLoading = false;
   String? _errorMessage;
+  final String apiUrl = AppConstants.instrumentosEndpoint;
 
   List<Instrumento> get instrumentos => _instrumentos;
   bool get isLoading => _isLoading;
@@ -20,7 +22,7 @@ class InstrumentosProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await ApiService.get('/api/instrumentos/');
+      final response = await ApiService.get(apiUrl);
       AppLogger.debug('listarInstrumentos status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
@@ -30,8 +32,8 @@ class InstrumentosProvider extends ChangeNotifier {
         throw _exceptionFromStatus(response.statusCode, 'Erro ao listar instrumentos');
       }
     } catch (e) {
-      final appException = ErrorHandler.handle(e);
-      _errorMessage = appException.message;
+      _errorMessage = ErrorHandler.handle(e).message;
+
       AppLogger.error('listarInstrumentos', e);
     } finally {
       _isLoading = false;
@@ -45,7 +47,7 @@ class InstrumentosProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await ApiService.post('/api/instrumentos/', body: instrumentoData);
+      final response = await ApiService.post(apiUrl, body: instrumentoData);
       AppLogger.debug('adicionarInstrumento status: ${response.statusCode}');
 
       if (response.statusCode == 201) {
@@ -74,12 +76,15 @@ class InstrumentosProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await ApiService.put('/api/instrumentos/$id/', body: instrumentoData);
+      final response = await ApiService.put('$apiUrl$id/', body: instrumentoData);
       AppLogger.debug('atualizarInstrumento status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
+        final atualizado = Instrumento.fromJson(response.data as Map<String, dynamic>);
+        final index = _instrumentos.indexWhere((i) => i.id == id);
+        if (index != -1) _instrumentos[index] = atualizado;
+        _instrumentos.sort((a, b) => a.nome.compareTo(b.nome));
         AppLogger.info('Instrumento atualizado: ID $id');
-        await listarInstrumentos();
         return true;
       } else {
         throw _exceptionFromStatus(response.statusCode, 'Falha ao atualizar instrumento');
@@ -101,7 +106,7 @@ class InstrumentosProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await ApiService.delete('/api/instrumentos/$id/');
+      final response = await ApiService.delete('$apiUrl$id/');
       AppLogger.debug('deletarInstrumento status: ${response.statusCode}');
 
       if (response.statusCode == 204) {
@@ -112,8 +117,7 @@ class InstrumentosProvider extends ChangeNotifier {
         throw _exceptionFromStatus(response.statusCode, 'Falha ao deletar instrumento');
       }
     } catch (e) {
-      final appException = ErrorHandler.handle(e);
-      _errorMessage = appException.message;
+      _errorMessage = ErrorHandler.handle(e).message;
       AppLogger.error('deletarInstrumento $id', e);
       return false;
     } finally {
@@ -154,7 +158,7 @@ class InstrumentosProvider extends ChangeNotifier {
       throw UnknownException(details: 'Formato inesperado: ${data.runtimeType}');
     }
 
-    return resultsList.map((json) => Instrumento.fromJson(json as Map<String, dynamic>)).toList();
+    return resultsList.map((instrumentoJson) => Instrumento.fromJson(instrumentoJson as Map<String, dynamic>)).toList();
   }
 
   void limparErro() {

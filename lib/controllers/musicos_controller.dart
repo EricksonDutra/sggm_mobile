@@ -33,8 +33,8 @@ class MusicosProvider extends ChangeNotifier {
         throw _exceptionFromStatus(response.statusCode, 'Erro ao listar músicos');
       }
     } catch (e) {
-      final appException = ErrorHandler.handle(e);
-      _errorMessage = appException.message;
+      _errorMessage = ErrorHandler.handle(e).message;
+
       AppLogger.error('listarMusicos', e);
     } finally {
       _isLoading = false;
@@ -54,8 +54,8 @@ class MusicosProvider extends ChangeNotifier {
         throw _exceptionFromStatus(response.statusCode, 'Músico não encontrado');
       }
     } catch (e) {
-      final appException = ErrorHandler.handle(e);
-      _errorMessage = appException.message;
+      _errorMessage = ErrorHandler.handle(e).message;
+
       AppLogger.error('buscarMusico $id', e);
       return null;
     }
@@ -71,15 +71,16 @@ class MusicosProvider extends ChangeNotifier {
       AppLogger.debug('adicionarMusico status: ${response.statusCode}');
 
       if (response.statusCode == 201 || response.statusCode == 200) {
-        AppLogger.info('Músico adicionado com sucesso');
-        await listarMusicos();
+        final novoMusico = Musico.fromJson(response.data as Map<String, dynamic>);
+        _musicos.add(novoMusico);
+        AppLogger.info('Músico adicionado: ID ${novoMusico.id}');
         return true;
       } else {
         throw _exceptionFromStatus(response.statusCode, 'Falha ao adicionar músico');
       }
     } catch (e) {
-      final appException = ErrorHandler.handle(e);
-      _errorMessage = appException.message;
+      _errorMessage = ErrorHandler.handle(e).message;
+
       AppLogger.error('adicionarMusico', e);
       return false;
     } finally {
@@ -98,15 +99,15 @@ class MusicosProvider extends ChangeNotifier {
       AppLogger.debug('atualizarMusico status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
+        _musicos[_musicos.indexWhere((m) => m.id == id)] = Musico.fromJson(response.data as Map<String, dynamic>);
         AppLogger.info('Músico atualizado: ID $id');
-        await listarMusicos();
         return true;
       } else {
         throw _exceptionFromStatus(response.statusCode, 'Falha ao atualizar músico');
       }
     } catch (e) {
-      final appException = ErrorHandler.handle(e);
-      _errorMessage = appException.message;
+      _errorMessage = ErrorHandler.handle(e).message;
+
       AppLogger.error('atualizarMusico $id', e);
       return false;
     } finally {
@@ -132,8 +133,8 @@ class MusicosProvider extends ChangeNotifier {
         throw _exceptionFromStatus(response.statusCode, 'Falha ao deletar músico');
       }
     } catch (e) {
-      final appException = ErrorHandler.handle(e);
-      _errorMessage = appException.message;
+      _errorMessage = ErrorHandler.handle(e).message;
+
       AppLogger.error('deletarMusico $id', e);
       return false;
     } finally {
@@ -174,7 +175,7 @@ class MusicosProvider extends ChangeNotifier {
       throw UnknownException(details: 'Formato inesperado: ${data.runtimeType}');
     }
 
-    return resultsList.map((json) => Musico.fromJson(json as Map<String, dynamic>)).toList();
+    return resultsList.map((musicoJson) => Musico.fromJson(musicoJson as Map<String, dynamic>)).toList();
   }
 
   void limparErro() {

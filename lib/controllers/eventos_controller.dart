@@ -52,9 +52,9 @@ class EventoProvider with ChangeNotifier {
       AppLogger.debug('adicionarEvento status: ${response.statusCode}');
 
       if (response.statusCode == 201 || response.statusCode == 200) {
-        final novo = Evento.fromJson(response.data);
-        _eventos.add(novo);
-        AppLogger.info('Evento adicionado: ID ${novo.id}');
+        final novoEvento = Evento.fromJson(response.data);
+        _eventos.add(novoEvento);
+        AppLogger.info('Evento adicionado: ID ${novoEvento.id}');
         return true;
       } else {
         throw _exceptionFromStatus(response.statusCode, 'Falha ao criar evento');
@@ -134,9 +134,8 @@ class EventoProvider with ChangeNotifier {
 
     try {
       final response = await ApiService.put(
-        // PUT em vez de POST
-        '$apiUrl$eventoId/atualizar_repertorio/', // novo endpoint
-        body: {'musicas': musicaIds}, // lista final completa
+        '$apiUrl$eventoId/atualizar_repertorio/',
+        body: {'musicas': musicaIds},
       );
       AppLogger.debug('atualizarRepertorio status: ${response.statusCode}');
 
@@ -209,7 +208,7 @@ class EventoProvider with ChangeNotifier {
       throw UnknownException(details: 'Formato inesperado: ${data.runtimeType}');
     }
 
-    return resultsList.map((item) => Evento.fromJson(item as Map<String, dynamic>)).toList();
+    return resultsList.map((eventoJson) => Evento.fromJson(eventoJson as Map<String, dynamic>)).toList();
   }
 
   void limparErro() {

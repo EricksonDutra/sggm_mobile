@@ -6,13 +6,12 @@ import 'package:sggm/util/app_logger.dart';
 class ComentariosProvider extends ChangeNotifier {
   List<ComentarioPerformance> _comentarios = [];
   bool _isLoading = false;
-  String? _erro;
-  // ← expõe a última mensagem de erro do criar para a UI mostrar no snackbar
+  String? _errorMessage;
   String? erroUltimaAcao;
 
   List<ComentarioPerformance> get comentarios => _comentarios;
   bool get isLoading => _isLoading;
-  String? get erro => _erro;
+  String? get erro => _errorMessage;
 
   void _setLoading(bool v) {
     _isLoading = v;
@@ -21,11 +20,11 @@ class ComentariosProvider extends ChangeNotifier {
 
   Future<void> listarPorEvento(int eventoId) async {
     _setLoading(true);
-    _erro = null;
+    _errorMessage = null;
     try {
       _comentarios = await ComentarioService.listarPorEvento(eventoId);
     } catch (e) {
-      _erro = e.toString();
+      _errorMessage = e.toString();
       AppLogger.error('Erro ao carregar comentários', e);
     } finally {
       _setLoading(false);
@@ -34,12 +33,11 @@ class ComentariosProvider extends ChangeNotifier {
 
   Future<void> listarPorMusica(int eventoId, int musicaId) async {
     _setLoading(true);
-    _erro = null;
+    _errorMessage = null;
     try {
-      // ← passa eventoId também para filtrar corretamente
       _comentarios = await ComentarioService.listarPorMusica(eventoId, musicaId);
     } catch (e) {
-      _erro = e.toString();
+      _errorMessage = e.toString();
       AppLogger.error('Erro ao carregar comentários por música', e);
     } finally {
       _setLoading(false);
@@ -53,16 +51,15 @@ class ComentariosProvider extends ChangeNotifier {
   }) async {
     erroUltimaAcao = null;
     try {
-      final novo = await ComentarioService.criar(
+      final novoComentario = await ComentarioService.criar(
         eventoId: eventoId,
         musicaId: musicaId,
         texto: texto,
       );
-      _comentarios.insert(0, novo);
+      _comentarios.insert(0, novoComentario);
       notifyListeners();
       return true;
     } catch (e) {
-      // ← armazena a mensagem real do backend (ex: "Comentários só podem ser publicados...")
       erroUltimaAcao = e.toString().replaceFirst('Exception: ', '');
       AppLogger.error('Erro ao criar comentário', e);
       return false;
@@ -114,7 +111,8 @@ class ComentariosProvider extends ChangeNotifier {
 
   void limpar() {
     _comentarios = [];
-    _erro = null;
+    _errorMessage = null;
     erroUltimaAcao = null;
+    notifyListeners();
   }
 }
