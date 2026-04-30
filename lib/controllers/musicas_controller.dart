@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:dio/dio.dart';
+import 'package:sggm/core/errors/app_exception.dart';
+import 'package:sggm/core/errors/error_handler.dart';
 import 'package:sggm/models/musicas.dart';
 import 'package:sggm/services/api_service.dart';
 import 'package:sggm/util/app_logger.dart';
@@ -29,22 +30,12 @@ class MusicasProvider extends ChangeNotifier {
       if (response.statusCode! == 200) {
         _musicas = _parseMusicasList(response.data);
         AppLogger.info('${_musicas.length} músicas carregadas');
-        notifyListeners();
-      } else if (response.statusCode! == 401) {
-        _errorMessage = 'Não autorizado. Faça login novamente.';
-        throw Exception(_errorMessage);
       } else {
-        _errorMessage = 'Erro ${response.statusCode}';
-        throw Exception(_errorMessage);
+        throw _exceptionFromStatus(response.statusCode, 'Erro ao listar músicas');
       }
-    } on DioException catch (e) {
-      _errorMessage = 'Erro ao listar músicas: ${e.message}';
-      AppLogger.error('Erro ao listar músicas', e);
-      rethrow;
-    } catch (e, stackTrace) {
-      _errorMessage = 'Erro ao listar músicas: $e';
-      AppLogger.error('Erro ao listar músicas', e, stackTrace);
-      rethrow;
+    } catch (e) {
+      _errorMessage = ErrorHandler.handle(e).message;
+      AppLogger.error('listarMusicas', e);
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -65,22 +56,12 @@ class MusicasProvider extends ChangeNotifier {
         final novaMusica = Musica.fromJson(response.data);
         _musicas.add(novaMusica);
         AppLogger.info('Música adicionada: ID ${novaMusica.id}');
-        notifyListeners();
-      } else if (response.statusCode! == 401) {
-        _errorMessage = 'Não autorizado. Faça login novamente.';
-        throw Exception(_errorMessage);
       } else {
-        _errorMessage = 'Falha ao adicionar música';
-        throw Exception(_errorMessage);
+        throw _exceptionFromStatus(response.statusCode, 'Falha ao adicionar música');
       }
-    } on DioException catch (e) {
-      _errorMessage = 'Erro ao adicionar música: ${e.message}';
-      AppLogger.error('Erro ao adicionar música', e);
-      rethrow;
-    } catch (e, stackTrace) {
-      _errorMessage = 'Erro ao adicionar música: $e';
-      AppLogger.error('Erro ao adicionar música', e, stackTrace);
-      rethrow;
+    } catch (e) {
+      _errorMessage = ErrorHandler.handle(e).message;
+      AppLogger.error('adicionarMusica', e);
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -102,23 +83,13 @@ class MusicasProvider extends ChangeNotifier {
         if (index != -1) {
           _musicas[index] = Musica.fromJson(response.data);
           AppLogger.info('Música atualizada: ID $id');
-          notifyListeners();
         }
-      } else if (response.statusCode! == 401) {
-        _errorMessage = 'Não autorizado. Faça login novamente.';
-        throw Exception(_errorMessage);
       } else {
-        _errorMessage = 'Falha ao atualizar música';
-        throw Exception(_errorMessage);
+        throw _exceptionFromStatus(response.statusCode, 'Falha ao atualizar música');
       }
-    } on DioException catch (e) {
-      _errorMessage = 'Erro ao atualizar música: ${e.message}';
-      AppLogger.error('Erro ao atualizar música ID $id', e);
-      rethrow;
-    } catch (e, stackTrace) {
-      _errorMessage = 'Erro ao atualizar música: $e';
-      AppLogger.error('Erro ao atualizar música ID $id', e, stackTrace);
-      rethrow;
+    } catch (e) {
+      _errorMessage = ErrorHandler.handle(e).message;
+      AppLogger.error('atualizarMusica $id', e);
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -138,22 +109,12 @@ class MusicasProvider extends ChangeNotifier {
       if (response.statusCode! >= 200 && response.statusCode! <= 299) {
         _musicas.removeWhere((m) => m.id == id);
         AppLogger.info('Música deletada: ID $id');
-        notifyListeners();
-      } else if (response.statusCode! == 401) {
-        _errorMessage = 'Não autorizado. Faça login novamente.';
-        throw Exception(_errorMessage);
       } else {
-        _errorMessage = 'Falha ao deletar música';
-        throw Exception(_errorMessage);
+        throw _exceptionFromStatus(response.statusCode, 'Falha ao deletar música');
       }
-    } on DioException catch (e) {
-      _errorMessage = 'Erro ao deletar música: ${e.message}';
-      AppLogger.error('Erro ao deletar música ID $id', e);
-      rethrow;
-    } catch (e, stackTrace) {
-      _errorMessage = 'Erro ao deletar música: $e';
-      AppLogger.error('Erro ao deletar música ID $id', e, stackTrace);
-      rethrow;
+    } catch (e) {
+      _errorMessage = ErrorHandler.handle(e).message;
+      AppLogger.error('deletarMusica $id', e);
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -163,22 +124,15 @@ class MusicasProvider extends ChangeNotifier {
   Future<Musica?> buscarMusica(int id) async {
     try {
       final response = await ApiService.get('$apiUrl$id/');
-
       AppLogger.debug('buscarMusica status: ${response.statusCode}');
-
-      if (response.statusCode! == 200) {
+      if (response.statusCode == 200) {
         final musica = Musica.fromJson(response.data);
         AppLogger.info('Música encontrada: ID $id');
         return musica;
-      } else if (response.statusCode! == 401) {
-        throw Exception('Não autorizado. Faça login novamente.');
       }
-      return null;
-    } on DioException catch (e) {
-      AppLogger.error('Erro ao buscar música ID $id', e);
-      return null;
-    } catch (e, stackTrace) {
-      AppLogger.error('Erro ao buscar música ID $id', e, stackTrace);
+      throw _exceptionFromStatus(response.statusCode, 'Erro ao buscar música');
+    } catch (e) {
+      AppLogger.error('buscarMusica $id', e);
       return null;
     }
   }
@@ -201,10 +155,10 @@ class MusicasProvider extends ChangeNotifier {
     } else if (data is List) {
       resultsList = data;
     } else {
-      throw Exception('Formato de resposta inesperado: ${data.runtimeType}');
+      throw UnknownException(details: 'Formato inesperado: ${data.runtimeType}');
     }
 
-    return resultsList.map((item) => Musica.fromJson(item as Map<String, dynamic>)).toList();
+    return resultsList.map((musicaJson) => Musica.fromJson(musicaJson as Map<String, dynamic>)).toList();
   }
 
   void limparErro() {
@@ -217,5 +171,21 @@ class MusicasProvider extends ChangeNotifier {
     _errorMessage = null;
     _isLoading = false;
     notifyListeners();
+  }
+
+  AppException _exceptionFromStatus(int? statusCode, String fallback) {
+    switch (statusCode) {
+      case 401:
+        return const UnauthorizedException();
+      case 403:
+        return const ForbiddenException();
+      case 404:
+        return const NotFoundException();
+      case 422:
+        return const ValidationException();
+      default:
+        if (statusCode != null && statusCode >= 500) return ServerException(statusCode: statusCode);
+        return UnknownException(details: '$fallback (HTTP $statusCode)');
+    }
   }
 }
