@@ -1,5 +1,6 @@
 import 'package:sggm/models/escalas.dart';
 import 'package:sggm/models/eventos.dart';
+import 'package:sggm/util/date_formatter.dart';
 
 class EscalaTextoBuilder {
   static String gerar({
@@ -11,9 +12,7 @@ class EscalaTextoBuilder {
     // Cabeçalho
     sb.writeln('*${evento.nome.toUpperCase()}*');
     if (evento.tipo.isNotEmpty) sb.writeln('🎵 Tipo: ${evento.tipo}');
-
-    final dataFormatada = evento.dataEvento.split('T')[0].split('-').reversed.join('/');
-    sb.writeln('🗓 Data: $dataFormatada');
+    sb.writeln('🗓 Data: ${DateFormatter.fromIso(evento.dataEvento)}');
 
     if (evento.dataEvento.contains('T')) {
       final horario = evento.dataEvento.split('T')[1].substring(0, 5);
@@ -29,14 +28,8 @@ class EscalaTextoBuilder {
 
     // Ensaio
     if (evento.dataHoraEnsaio != null) {
-      final ensaio = evento.dataHoraEnsaio!;
-      final dia = '${ensaio.day.toString().padLeft(2, '0')}/'
-          '${ensaio.month.toString().padLeft(2, '0')}/'
-          '${ensaio.year}';
-      final hora = '${ensaio.hour.toString().padLeft(2, '0')}:'
-          '${ensaio.minute.toString().padLeft(2, '0')}';
       sb.writeln('*ENSAIO:*');
-      sb.writeln('📅 $dia às $hora');
+      sb.writeln('📅 ${DateFormatter.dataHora(evento.dataHoraEnsaio!)}');
       sb.writeln('');
     }
 
