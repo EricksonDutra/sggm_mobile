@@ -1,3 +1,5 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sggm/controllers/auth_controller.dart';
@@ -7,9 +9,11 @@ import 'package:sggm/controllers/instrumentos_controller.dart';
 import 'package:sggm/controllers/musicos_controller.dart';
 import 'package:sggm/models/escalas.dart';
 import 'package:sggm/models/eventos.dart';
+import 'package:sggm/util/date_formatter.dart';
 import 'package:sggm/views/widgets/dialogs/adicionar_escala_dialog.dart';
 import 'package:sggm/views/widgets/escalas/escala_card.dart';
 import 'package:sggm/views/widgets/escalas/escala_filtros_sheet.dart';
+import 'package:sggm/views/widgets/escalas/evento_header_tile.dart';
 import 'package:sggm/views/widgets/loading/shimmer_card.dart';
 
 class EscalasPage extends StatefulWidget {
@@ -29,6 +33,8 @@ class _EscalasPageState extends State<EscalasPage> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _carregarTudo());
   }
+
+  // ── carregamento ──────────────────────────────────────────────────────────
 
   Future<void> _carregarTudo() async {
     try {
@@ -50,26 +56,7 @@ class _EscalasPageState extends State<EscalasPage> {
     }
   }
 
-  DateTime? _parseDataEvento(String raw) {
-    if (raw.trim().isEmpty) return null;
-    final iso = DateTime.tryParse(raw);
-    if (iso != null) return iso;
-    final partes = raw.split('T').first.split('-');
-    if (partes.length == 3) {
-      final y = int.tryParse(partes[0]);
-      final m = int.tryParse(partes[1]);
-      final d = int.tryParse(partes[2]);
-      if (y != null && m != null && d != null) return DateTime(y, m, d);
-    }
-    return null;
-  }
-
-  String _formatarData(DateTime dt) => '${dt.day.toString().padLeft(2, '0')}/'
-      '${dt.month.toString().padLeft(2, '0')}/'
-      '${dt.year}';
-
-  String _formatarHora(DateTime dt) => '${dt.hour.toString().padLeft(2, '0')}:'
-      '${dt.minute.toString().padLeft(2, '0')}';
+  // ── helpers ───────────────────────────────────────────────────────────────
 
   bool _eventoEhPassado(DateTime dataEvento) {
     final temHorario = dataEvento.hour != 0 || dataEvento.minute != 0;
@@ -78,6 +65,8 @@ class _EscalasPageState extends State<EscalasPage> {
         : DateTime(dataEvento.year, dataEvento.month, dataEvento.day + 1, 3, 0);
     return DateTime.now().isAfter(corte);
   }
+
+  // ── filtros ───────────────────────────────────────────────────────────────
 
   List<Escala> _filtrarPorStatus(List<Escala> escalas) {
     switch (_filtro) {
@@ -93,28 +82,25 @@ class _EscalasPageState extends State<EscalasPage> {
   List<Escala> _aplicarFiltroAvancado(List<Escala> escalas, Map<int, Evento> eventosMap) {
     if (!_filtroAvancado.ativo) return escalas;
 
-    return escalas.where((e) {
-      final ev = eventosMap[e.eventoId];
-      final dt = ev != null ? _parseDataEvento(ev.dataEvento) : null;
+    return escalas.where((escala) {
+      final ev = eventosMap[escala.eventoId];
+      final dt = ev != null ? DateFormatter.tryParse(ev.dataEvento) : null;
 
-      if (_filtroAvancado.ano != null && dt?.year != _filtroAvancado.ano) {
-        return false;
-      }
-      if (_filtroAvancado.mes != null && dt?.month != _filtroAvancado.mes) {
-        return false;
-      }
+      if (_filtroAvancado.ano != null && dt?.year != _filtroAvancado.ano) return false;
+      if (_filtroAvancado.mes != null && dt?.month != _filtroAvancado.mes) return false;
       if (_filtroAvancado.musicoNome != null &&
-          !(e.musicoNome ?? '').toLowerCase().contains(_filtroAvancado.musicoNome!.toLowerCase())) {
+          !(escala.musicoNome ?? '').toLowerCase().contains(_filtroAvancado.musicoNome!.toLowerCase())) {
         return false;
       }
       if (_filtroAvancado.instrumentoNome != null) {
-        final nomeEscala = (e.instrumentoNome ?? '').toLowerCase();
-        final filtro = _filtroAvancado.instrumentoNome!.toLowerCase();
-        if (!nomeEscala.contains(filtro)) return false;
+        final nomeEscala = (escala.instrumentoNome ?? '').toLowerCase();
+        if (!nomeEscala.contains(_filtroAvancado.instrumentoNome!.toLowerCase())) return false;
       }
       return true;
     }).toList();
   }
+
+  // ── UI auxiliar ───────────────────────────────────────────────────────────
 
   Widget _buildFiltrosStatus() {
     return SingleChildScrollView(
@@ -150,32 +136,38 @@ class _EscalasPageState extends State<EscalasPage> {
     );
   }
 
+  // ── publicar escala ───────────────────────────────────────────────────────
+
+  Future<bool> _pedirConfirmacaoPublicar(BuildContext context, int qtd) async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Publicar escala'),
+            content: Text(
+              'Isso enviará $qtd ${qtd == 1 ? "músico" : "músicos"} para o servidor '
+              'e disparará as notificações push. Confirmar?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Publicar'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
   Future<void> _publicarEscala(BuildContext context, int eventoId) async {
     final provider = context.read<EscalasProvider>();
     final qtd = provider.getRascunhos(eventoId).length;
 
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Publicar escala'),
-        content: Text(
-          'Isso enviará $qtd ${qtd == 1 ? "músico" : "músicos"} para o servidor '
-          'e disparará as notificações push. Confirmar?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Publicar'),
-          ),
-        ],
-      ),
-    );
-
+    final confirmar = await _pedirConfirmacaoPublicar(context, qtd);
     if (confirmar != true) return;
 
     final ok = await provider.publicarEscalas(eventoId);
@@ -190,53 +182,7 @@ class _EscalasPageState extends State<EscalasPage> {
     );
   }
 
-  Widget _buildEventoHeader({
-    required BuildContext context,
-    required int eventoId,
-    required List<Escala> escalasDoEvento,
-    required Evento? evento,
-    required bool isLider,
-  }) {
-    final provider = context.read<EscalasProvider>();
-    final rascunhos = provider.getRascunhos(eventoId);
-    final publicadas = escalasDoEvento.where((e) => (e.id ?? 0) >= 0).toList();
-    final confirmadas = publicadas.where((e) => e.confirmado).length;
-    final pendentes = publicadas.length - confirmadas;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              evento?.nome ?? escalasDoEvento.first.eventoNome ?? 'Evento #$eventoId',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          if (publicadas.isNotEmpty)
-            Text(
-              '$confirmadas✅  $pendentes⏳',
-              style: TextStyle(color: Colors.grey[700], fontWeight: FontWeight.w600),
-            ),
-          if (isLider && rascunhos.isNotEmpty) ...[
-            const SizedBox(width: 10),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              icon: const Icon(Icons.send, size: 16),
-              label: Text('Publicar (${rascunhos.length})'),
-              onPressed: () => _publicarEscala(context, eventoId),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
+  // ── lista agrupada ────────────────────────────────────────────────────────
 
   Widget _buildListaAgrupada({
     required BuildContext context,
@@ -264,9 +210,7 @@ class _EscalasPageState extends State<EscalasPage> {
             if (_filtroAvancado.ativo) ...[
               const SizedBox(height: 8),
               TextButton.icon(
-                onPressed: () {
-                  setState(() => _filtroAvancado.limpar());
-                },
+                onPressed: () => setState(() => _filtroAvancado.limpar()),
                 icon: const Icon(Icons.filter_list_off),
                 label: const Text('Limpar filtros'),
               ),
@@ -277,15 +221,15 @@ class _EscalasPageState extends State<EscalasPage> {
     }
 
     final Map<int, List<Escala>> porEvento = {};
-    for (final e in escalas) {
-      porEvento.putIfAbsent(e.eventoId, () => []);
-      porEvento[e.eventoId]!.add(e);
+    for (final escala in escalas) {
+      porEvento.putIfAbsent(escala.eventoId, () => []);
+      porEvento[escala.eventoId]!.add(escala);
     }
 
     final eventoIds = porEvento.keys.toList()
       ..sort((a, b) {
-        final da = eventosMap[a] != null ? _parseDataEvento(eventosMap[a]!.dataEvento) : null;
-        final db = eventosMap[b] != null ? _parseDataEvento(eventosMap[b]!.dataEvento) : null;
+        final da = eventosMap[a] != null ? DateFormatter.tryParse(eventosMap[a]!.dataEvento) : null;
+        final db = eventosMap[b] != null ? DateFormatter.tryParse(eventosMap[b]!.dataEvento) : null;
         if (da == null && db == null) return a.compareTo(b);
         if (da == null) return 1;
         if (db == null) return -1;
@@ -297,12 +241,13 @@ class _EscalasPageState extends State<EscalasPage> {
       padding: const EdgeInsets.only(bottom: 24),
       children: [
         for (final eventoId in eventoIds) ...[
-          _buildEventoHeader(
-            context: context,
+          EventoHeaderTile(
             eventoId: eventoId,
             escalasDoEvento: porEvento[eventoId]!,
             evento: eventosMap[eventoId],
             isLider: isLider,
+            qtdRascunhos: context.read<EscalasProvider>().getRascunhos(eventoId).length,
+            onPublicar: () => _publicarEscala(context, eventoId),
           ),
           ExpansionTile(
             initiallyExpanded: !isPassadas,
@@ -310,12 +255,12 @@ class _EscalasPageState extends State<EscalasPage> {
             title: Builder(builder: (_) {
               final ev = eventosMap[eventoId];
               if (ev == null) return const SizedBox.shrink();
-              final dt = _parseDataEvento(ev.dataEvento);
+              final dt = DateFormatter.tryParse(ev.dataEvento);
               if (dt == null) return const SizedBox.shrink();
               final temHora = ev.dataEvento.contains('T') && (dt.hour != 0 || dt.minute != 0);
-              final horaStr = temHora ? ' • ${_formatarHora(dt)}' : '';
+              final horaStr = temHora ? ' • ${DateFormatter.hora(dt)}' : '';
               return Text(
-                '${_formatarData(dt)}$horaStr',
+                '${DateFormatter.fromDateTime(dt)}$horaStr',
                 style: TextStyle(color: Colors.grey[600], fontSize: 13),
               );
             }),
@@ -338,6 +283,8 @@ class _EscalasPageState extends State<EscalasPage> {
       ],
     );
   }
+
+  // ── build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -411,13 +358,13 @@ class _EscalasPageState extends State<EscalasPage> {
             final proximas = <Escala>[];
             final passadas = <Escala>[];
 
-            for (final e in filtradas) {
-              final ev = _eventosMap[e.eventoId];
-              final dt = ev != null ? _parseDataEvento(ev.dataEvento) : null;
+            for (final escala in filtradas) {
+              final ev = _eventosMap[escala.eventoId];
+              final dt = ev != null ? DateFormatter.tryParse(ev.dataEvento) : null;
               if (dt == null || !_eventoEhPassado(dt)) {
-                proximas.add(e);
+                proximas.add(escala);
               } else {
-                passadas.add(e);
+                passadas.add(escala);
               }
             }
 
