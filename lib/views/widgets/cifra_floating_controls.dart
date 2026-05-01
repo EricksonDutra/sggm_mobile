@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sggm/theme/app_theme.dart';
 import 'package:sggm/util/cifra_scroll_controller.dart';
-import 'package:sggm/views/musica_detalhes_page.dart';
+import 'package:sggm/util/modo_cifra.dart';
 
 class CifraFloatingControls extends StatefulWidget {
   final CifraScrollConfig config;

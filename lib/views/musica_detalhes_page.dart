@@ -1,783 +1,175 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:sggm/controllers/musica_detalhes_controller.dart';
 import 'package:sggm/models/musicas.dart';
-import 'package:sggm/theme/app_theme.dart';
-import 'package:sggm/util/cifra_parser.dart';
-import 'package:sggm/util/cifra_scroll_controller.dart';
-import 'package:sggm/views/widgets/cifra_floating_controls.dart';
-import 'package:sggm/views/widgets/cifra_secao_widget.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:webview_flutter/webview_flutter.dart';
-import 'package:youtube_player_flutter/youtube_player_flutter.dart';
+import 'package:sggm/services/musicas_service.dart';
+import 'package:sggm/util/modo_cifra.dart';
+import 'package:sggm/views/widgets/cifra_nativa_tab.dart';
+import 'package:sggm/views/widgets/cifra_web_tab.dart';
+import 'package:sggm/views/widgets/youtube_tab.dart';
 
-enum ModoCifra { nativa, web }
-
-class MusicaDetalhesPage extends StatefulWidget {
+class MusicaDetalhesPage extends StatelessWidget {
   final Musica musica;
 
   const MusicaDetalhesPage({super.key, required this.musica});
 
   @override
-  State<MusicaDetalhesPage> createState() => _MusicaDetalhesPageState();
+  Widget build(BuildContext context) {
+    final musicasService = context.read<MusicasService>();
+
+    return ChangeNotifierProvider(
+      create: (_) => MusicaDetalhesController(musica)..carregarDetalhes(musicasService),
+      child: const _MusicaDetalhesView(),
+    );
+  }
 }
 
-class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTickerProviderStateMixin {
-  // ── Controllers ────────────────────────────────────────────────────────────
+class _MusicaDetalhesView extends StatefulWidget {
+  const _MusicaDetalhesView();
+
+  @override
+  State<_MusicaDetalhesView> createState() => _MusicaDetalhesViewState();
+}
+
+class _MusicaDetalhesViewState extends State<_MusicaDetalhesView> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  YoutubePlayerController? _youtubeController;
-  WebViewController? _webViewController;
-  final ScrollController _scrollController = ScrollController();
-
-  // ── Flags de conteúdo ──────────────────────────────────────────────────────
-  bool _hasYoutube = false;
-  bool _hasCifraNativa = false;
-  bool _hasCifraWeb = false;
-  bool _hasCifra = false;
-
-  // ── Estado da WebView ──────────────────────────────────────────────────────
-  bool _webViewInitialized = false;
-  bool _isLoadingWebView = false;
-
-  // ── Estado da cifra nativa ─────────────────────────────────────────────────
-  int _semitonsDelta = 0;
-  String? _tomAtualDisplay;
-  CifraScrollConfig _scrollConfig = const CifraScrollConfig();
-  bool _autoScrollAtivo = false;
-
-  late ModoCifra _modoCifra;
-
-  // ── Pause-on-touch ─────────────────────────────────────────────────────────
-  bool _usuarioInteragindo = false; // ✅ era final, não podia ser alterado
-  Timer? _retomadaTimer;
 
   @override
   void initState() {
     super.initState();
-    _initFlags();
-    _initTabController();
-    _initYoutube();
-    _initWebViewSeNecessario();
+    final c = context.read<MusicaDetalhesController>();
+    final tabCount = [c.hasCifra, c.hasYoutube].where((v) => v).length;
+
+    _tabController = TabController(
+      length: tabCount > 0 ? tabCount : 1,
+      vsync: this,
+    )..addListener(() {
+        if (!_tabController.indexIsChanging) return;
+        context.read<MusicaDetalhesController>().setTabIndex(_tabController.index);
+      });
   }
 
   @override
   void dispose() {
-    _retomadaTimer?.cancel();
-    _youtubeController?.dispose();
     _tabController.dispose();
-    _scrollController.dispose();
     super.dispose();
   }
 
-  void _initFlags() {
-    _hasYoutube = widget.musica.linkYoutube != null && widget.musica.linkYoutube!.isNotEmpty;
-    _hasCifraNativa = widget.musica.conteudoCifra != null && widget.musica.conteudoCifra!.isNotEmpty;
-    _hasCifraWeb = widget.musica.linkCifra != null && widget.musica.linkCifra!.isNotEmpty;
-    _hasCifra = _hasCifraNativa || _hasCifraWeb;
-
-    _tomAtualDisplay = widget.musica.tom;
-    _modoCifra = _hasCifraNativa ? ModoCifra.nativa : ModoCifra.web;
-  }
-
-  void _initTabController() {
-    final tabCount = [_hasCifra, _hasYoutube].where((v) => v).length;
-    _tabController = TabController(
-      length: tabCount > 0 ? tabCount : 1,
-      vsync: this,
-      initialIndex: 0, // cifra sempre primeiro
-    );
-  }
-
-  void _initYoutube() {
-    if (!_hasYoutube) return;
-    final videoId = YoutubePlayer.convertUrlToId(widget.musica.linkYoutube!);
-    if (videoId == null) return;
-    _youtubeController = YoutubePlayerController(
-      initialVideoId: videoId,
-      flags: const YoutubePlayerFlags(
-        autoPlay: false,
-        mute: false,
-        enableCaption: false,
-      ),
-    );
-  }
-
-  void _initWebViewSeNecessario() {
-    if (_hasCifraWeb && !_hasCifraNativa) {
-      _initializeWebView();
-    }
-  }
-
-  void _initializeWebView() {
-    if (_webViewInitialized || !_hasCifraWeb) return;
-
-    setState(() => _isLoadingWebView = true);
-
-    try {
-      _webViewController = WebViewController()
-        ..setJavaScriptMode(JavaScriptMode.unrestricted)
-        ..setBackgroundColor(Colors.grey[100]!)
-        ..setNavigationDelegate(
-          NavigationDelegate(
-            onPageFinished: (_) {
-              _webViewController?.runJavaScript('''
-                document.body.style.backgroundColor = '#f5f5f5';
-                document.body.style.color = '#000000';
-              ''');
-              if (mounted) setState(() => _isLoadingWebView = false);
-            },
-            onWebResourceError: (_) {
-              if (!mounted) return;
-              setState(() => _isLoadingWebView = false);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Erro ao carregar a cifra'),
-                  backgroundColor: Colors.orange,
-                ),
-              );
-            },
-            onNavigationRequest: (_) => NavigationDecision.navigate,
-          ),
-        )
-        ..loadRequest(Uri.parse(widget.musica.linkCifra!));
-
-      setState(() => _webViewInitialized = true);
-    } catch (_) {
-      if (mounted) setState(() => _isLoadingWebView = false);
-    }
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Transposição
-  // ─────────────────────────────────────────────────────────────────────────
-
-  static const _tons = [
-    'C',
-    'C#',
-    'D',
-    'D#',
-    'E',
-    'F',
-    'F#',
-    'G',
-    'G#',
-    'A',
-    'A#',
-    'B',
-  ];
-
-  void _transporTom(int delta) {
-    setState(() {
-      _semitonsDelta += delta;
-      final tomOriginal = widget.musica.tom;
-      if (tomOriginal != null && _tons.contains(tomOriginal)) {
-        final novoIndex = ((_tons.indexOf(tomOriginal) + _semitonsDelta) % 12 + 12) % 12;
-        _tomAtualDisplay = _tons[novoIndex];
-      }
-    });
-  }
-
-  void _resetarTom() {
-    setState(() {
-      _semitonsDelta = 0;
-      _tomAtualDisplay = widget.musica.tom;
-    });
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Auto-scroll
-  // ─────────────────────────────────────────────────────────────────────────
-
-  void _toggleAutoScroll() {
-    setState(() => _autoScrollAtivo = !_autoScrollAtivo);
-    if (_autoScrollAtivo) _iniciarAutoScroll();
-  }
-
-  Future<void> _iniciarAutoScroll() async {
-    while (_autoScrollAtivo && mounted) {
-      if (!_usuarioInteragindo && _scrollController.hasClients) {
-        final maxExtent = _scrollController.position.maxScrollExtent;
-        final atual = _scrollController.offset;
-
-        if (atual >= maxExtent) {
-          setState(() => _autoScrollAtivo = false);
-          break;
-        }
-
-        await _scrollController.animateTo(
-          atual + 1,
-          duration: Duration(
-            milliseconds: (1000 ~/ _scrollConfig.velocidade * 10),
-          ),
-          curve: Curves.linear,
-        );
-      }
-      await Future.delayed(const Duration(milliseconds: 16));
-    }
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Helpers
-  // ─────────────────────────────────────────────────────────────────────────
-
-  Future<void> _abrirLink(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-      return;
-    }
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Não foi possível abrir o link'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Build principal
-  // ─────────────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
-    final temConteudo = _hasYoutube || _hasCifra;
+    final c = context.watch<MusicaDetalhesController>();
+    final temConteudo = c.hasYoutube || c.hasCifra;
 
     return Scaffold(
       appBar: AppBar(
-        title: _buildAppBarTitle(),
-        bottom: temConteudo ? _buildTabBar() : null,
+        title: _buildTitle(c),
+        bottom: temConteudo ? _buildTabBar(c) : null,
       ),
-      body: temConteudo ? _buildTabBarView() : _buildSemConteudo(),
+      body: temConteudo ? _buildBody(c) : _buildSemConteudo(c),
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // AppBar
-  // ─────────────────────────────────────────────────────────────────────────
-
-  Widget _buildAppBarTitle() {
+  Widget _buildTitle(MusicaDetalhesController c) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          widget.musica.titulo,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          overflow: TextOverflow.ellipsis,
-        ),
-        Text(
-          widget.musica.artistaNome,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal, color: Colors.white70),
-          overflow: TextOverflow.ellipsis,
-        ),
+        Text(c.musica.titulo,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+        Text(c.musica.artistaNome,
+            style: const TextStyle(fontSize: 12, color: Colors.white70), overflow: TextOverflow.ellipsis),
       ],
     );
   }
 
-  PreferredSizeWidget _buildTabBar() {
+  PreferredSizeWidget _buildTabBar(MusicaDetalhesController c) {
     return PreferredSize(
-      preferredSize: const Size.fromHeight(44), // era ~72 com ícone grande + texto
+      preferredSize: const Size.fromHeight(44),
       child: TabBar(
         controller: _tabController,
         indicatorWeight: 2,
-        labelPadding: const EdgeInsets.symmetric(horizontal: 16),
         tabs: [
-          if (_hasCifra)
+          if (c.hasCifra)
             const Tab(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.music_note, size: 16),
-                  SizedBox(width: 6),
-                  Text('Cifra', style: TextStyle(fontSize: 13)),
-                ],
-              ),
-            ),
-          if (_hasYoutube)
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.music_note, size: 16),
+              SizedBox(width: 6),
+              Text('Cifra', style: TextStyle(fontSize: 13)),
+            ])),
+          if (c.hasYoutube)
             const Tab(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.play_circle, size: 16),
-                  SizedBox(width: 6),
-                  Text('Vídeo', style: TextStyle(fontSize: 13)),
-                ],
-              ),
-            ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.play_circle, size: 16),
+              SizedBox(width: 6),
+              Text('Vídeo', style: TextStyle(fontSize: 13)),
+            ])),
         ],
       ),
     );
   }
 
-  Widget _buildTabBarView() {
-    return TabBarView(
-      controller: _tabController,
-      physics: const NeverScrollableScrollPhysics(),
-      children: [
-        if (_hasCifra) _buildCifraTab(),
-        if (_hasYoutube) _buildYoutubeTab(),
-      ],
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Tab: YouTube
-  // ─────────────────────────────────────────────────────────────────────────
-
-  Widget _buildYoutubeTab() {
-    if (_youtubeController == null) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline, size: 64, color: Colors.red),
-            SizedBox(height: 16),
-            Text(
-              'Link do YouTube inválido',
-              style: TextStyle(fontSize: 16, color: Colors.grey),
-            ),
-          ],
-        ),
-      );
+  Widget _buildBody(MusicaDetalhesController c) {
+    if (c.isLoading) {
+      return const Center(child: CircularProgressIndicator());
     }
 
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          YoutubePlayer(
-            controller: _youtubeController!,
-            showVideoProgressIndicator: true,
-            progressIndicatorColor: Colors.red,
-            progressColors: const ProgressBarColors(
-              playedColor: Colors.red,
-              handleColor: Colors.redAccent,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildInfoRow(
-                  Icons.music_note,
-                  'Tom',
-                  widget.musica.tom ?? 'Não informado',
-                ),
-                const SizedBox(height: 8),
-                _buildInfoRow(Icons.person, 'Artista', widget.musica.artistaNome),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.open_in_new),
-                    label: const Text('Abrir no YouTube'),
-                    onPressed: () => _abrirLink(widget.musica.linkYoutube!),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+    final abas = <Widget>[
+      if (c.hasCifra) _buildCifraTab(c),
+      if (c.hasYoutube) YoutubeTab(controller: c),
+    ];
+    return IndexedStack(index: c.tabIndex, children: abas);
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Tab: Cifra (roteador)
-  // ─────────────────────────────────────────────────────────────────────────
-
-  Widget _buildCifraTab() {
-    if (_hasCifraNativa && !_hasCifraWeb) return _buildCifraNativa();
-    if (!_hasCifraNativa && _hasCifraWeb) return _buildCifraWebView();
-
-    // Tem ambos: só o Stack com o floating já cuida do seletor
-    return _modoCifra == ModoCifra.nativa ? _buildCifraNativa() : _buildCifraWebView();
+  Widget _buildCifraTab(MusicaDetalhesController c) {
+    if (c.hasCifraNativa && !c.hasCifraWeb) return CifraNativaTab(controller: c);
+    if (!c.hasCifraNativa && c.hasCifraWeb) return CifraWebTab(controller: c);
+    return c.modoCifra == ModoCifra.nativa ? CifraNativaTab(controller: c) : CifraWebTab(controller: c);
   }
 
-  Widget _buildSeletorModoCifra() {
-    return Container(
-      color: const Color(0xFF1A1A1A),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildChipModo(
-            label: 'Local',
-            icon: Icons.phonelink_outlined,
-            modo: ModoCifra.nativa,
-          ),
-          const SizedBox(width: 8),
-          _buildChipModo(
-            label: 'Web',
-            icon: Icons.language,
-            modo: ModoCifra.web,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildChipModo({
-    required String label,
-    required IconData icon,
-    required ModoCifra modo,
-  }) {
-    final selecionado = _modoCifra == modo;
-
-    return GestureDetector(
-      onTap: () {
-        if (_modoCifra == modo) return;
-        setState(() => _modoCifra = modo);
-        if (modo == ModoCifra.web) _initializeWebView();
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-        decoration: BoxDecoration(
-          color: selecionado ? AppTheme.presbyterianoVerde : AppTheme.backgroundTerciario,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selecionado ? AppTheme.presbyterianoVerde : Colors.white24,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: selecionado ? Colors.white : Colors.white54),
-            const SizedBox(width: 5),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: selecionado ? FontWeight.w700 : FontWeight.w400,
-                color: selecionado ? Colors.white : Colors.white54,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Cifra nativa
-  // ─────────────────────────────────────────────────────────────────────────
-
-  Widget _buildCifraNativa() {
-    final conteudo = CifraParser.transporCifra(
-      widget.musica.conteudoCifra!,
-      _semitonsDelta,
-    );
-    final secoes = CifraParser.parsearSecoes(conteudo);
-    final screenWidth = MediaQuery.of(context).size.width;
-    final usarDuasColunas = screenWidth > 800;
-
-    return Stack(
-      children: [
-        Listener(
-          onPointerDown: (_) {
-            if (_autoScrollAtivo) {
-              _retomadaTimer?.cancel();
-              setState(() => _usuarioInteragindo = true);
-            }
-          },
-          onPointerUp: (_) {
-            if (_autoScrollAtivo) {
-              _retomadaTimer = Timer(const Duration(seconds: 2), () {
-                if (mounted) setState(() => _usuarioInteragindo = false);
-              });
-            }
-          },
-          child: CustomScrollView(
-            controller: _scrollController,
-            slivers: [
-              // Barra de tom flutuante
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    16,
-                    8,
-                    usarDuasColunas ? 16 : 72,
-                    80,
-                  ),
-                  child: usarDuasColunas ? _buildCifraEmDuasColunas(secoes) : _buildCifraEmUmaColuna(secoes),
-                ),
-              ),
-            ],
-          ),
-        ),
-        _buildControlesFixos(),
-      ],
-    );
-  }
-
-  Widget _buildCifraEmUmaColuna(List<SecaoCifra> secoes) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ...secoes.map((s) => CifraSecaoWidget(secao: s, fontSize: _scrollConfig.fontSize)),
-        const SizedBox(height: 80),
-      ],
-    );
-  }
-
-  Widget _buildCifraEmDuasColunas(List<SecaoCifra> secoes) {
-    // Distribui seções alternadamente entre col esquerda e col direita
-    // para manter a ordem de leitura (col esquerda = seções pares, col direita = ímpares)
-    final colunaEsquerda = <SecaoCifra>[];
-    final colunaDireita = <SecaoCifra>[];
-
-    for (int i = 0; i < secoes.length; i++) {
-      if (i.isEven) {
-        colunaEsquerda.add(secoes[i]);
-      } else {
-        colunaDireita.add(secoes[i]);
-      }
-    }
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Coluna esquerda
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: colunaEsquerda.map((s) => CifraSecaoWidget(secao: s, fontSize: _scrollConfig.fontSize)).toList(),
-          ),
-        ),
-        const SizedBox(width: 32),
-        // Divisor vertical
-        Container(
-          width: 1,
-          color: Colors.white12,
-          margin: const EdgeInsets.only(top: 4),
-        ),
-        const SizedBox(width: 32),
-        // Coluna direita
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: colunaDireita.map((s) => CifraSecaoWidget(secao: s, fontSize: _scrollConfig.fontSize)).toList(),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBarraTom() {
-    return Container(
-      color: const Color(0xFF1E1E1E),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.music_note,
-            size: 16,
-            color: AppTheme.presbyterianoVerdeClaro,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            'Tom: ${_tomAtualDisplay ?? widget.musica.tom ?? "?"}',
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-              color: Colors.white,
-            ),
-          ),
-          if (_semitonsDelta != 0) ...[
-            const SizedBox(width: 6),
-            _buildBadgeSemitons(),
-          ],
-          const Spacer(),
-          _buildBotaoTom(Icons.remove_circle_outline, () => _transporTom(-1)),
-          _buildBotaoTom(Icons.add_circle_outline, () => _transporTom(1)),
-          if (_semitonsDelta != 0) _buildBotaoTom(Icons.refresh, _resetarTom, color: Colors.white54),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBadgeSemitons() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-      decoration: BoxDecoration(
-        color: AppTheme.presbyterianoVerde.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        '${_semitonsDelta > 0 ? "+" : ""}$_semitonsDelta',
-        style: const TextStyle(
-          fontSize: 11,
-          color: AppTheme.presbyterianoVerdeClaro,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBotaoTom(
-    IconData icon,
-    VoidCallback onPressed, {
-    Color color = AppTheme.presbyterianoVerdeClaro,
-  }) {
-    return IconButton(
-      onPressed: onPressed,
-      icon: Icon(icon, size: 20),
-      color: color,
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-    );
-  }
-
-  Widget _buildControlesFixos() {
-    return CifraFloatingControls(
-      config: _scrollConfig,
-      autoScrollAtivo: _autoScrollAtivo,
-      onToggleScroll: _toggleAutoScroll,
-      onFonteMais: () => setState(() => _scrollConfig = _scrollConfig.aumentarFonte()),
-      onFonteMenos: () => setState(() => _scrollConfig = _scrollConfig.diminuirFonte()),
-      // ✅ slider — substitui onVelocidadeMais/onVelocidadeMenos
-      onVelocidadeChanged: (v) => setState(() => _scrollConfig = _scrollConfig.comVelocidade(v)),
-      tomAtual: _tomAtualDisplay ?? widget.musica.tom,
-      semitonsDelta: _semitonsDelta,
-      onTomMenos: () => _transporTom(-1),
-      onTomMais: () => _transporTom(1),
-      onTomReset: _resetarTom,
-      modoCifra: (_hasCifraNativa && _hasCifraWeb) ? _modoCifra : null,
-      onModoChanged: (_hasCifraNativa && _hasCifraWeb)
-          ? (modo) {
-              setState(() => _modoCifra = modo);
-              if (modo == ModoCifra.web) _initializeWebView();
-            }
-          : null,
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Cifra Web (WebView)
-  // ─────────────────────────────────────────────────────────────────────────
-
-  Widget _buildCifraWebView() {
-    if (_webViewController == null) {
-      return const Center(
-        child: Text(
-          'Não foi possível carregar a cifra',
-          style: TextStyle(color: Colors.grey),
-        ),
-      );
-    }
-
-    return Column(
-      children: [
-        _buildBarraCifraWeb(),
-        Expanded(child: _buildWebViewContent()),
-      ],
-    );
-  }
-
-  Widget _buildBarraCifraWeb() {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.all(8),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              'Tom: ${widget.musica.tom ?? "Não informado"}',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
-            ),
-          ),
-          if (_isLoadingWebView)
-            const Padding(
-              padding: EdgeInsets.only(right: 8),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-          IconButton(
-            icon: const Icon(Icons.open_in_browser, color: Colors.black87),
-            tooltip: 'Abrir no navegador',
-            onPressed: () => _abrirLink(widget.musica.linkCifra!),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWebViewContent() {
-    return Stack(
-      children: [
-        WebViewWidget(controller: _webViewController!),
-        if (_isLoadingWebView) const LinearProgressIndicator(),
-      ],
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Sem conteúdo
-  // ─────────────────────────────────────────────────────────────────────────
-
-  Widget _buildSemConteudo() {
+  Widget _buildSemConteudo(MusicaDetalhesController c) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const Icon(Icons.music_off, size: 64, color: Colors.grey),
           const SizedBox(height: 16),
-          const Text(
-            'Nenhum conteúdo disponível',
-            style: TextStyle(fontSize: 18, color: Colors.grey),
-          ),
+          const Text('Nenhum conteúdo disponível', style: TextStyle(fontSize: 18, color: Colors.grey)),
           const SizedBox(height: 8),
-          const Text(
-            'Esta música não possui cifra ou vídeo cadastrado',
-            style: TextStyle(color: Colors.grey),
-            textAlign: TextAlign.center,
-          ),
+          const Text('Esta música não possui cifra ou vídeo cadastrado',
+              style: TextStyle(color: Colors.grey), textAlign: TextAlign.center),
           const SizedBox(height: 24),
-          _buildInfoCard(),
+          Card(
+            margin: const EdgeInsets.all(16),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(children: [
+                _InfoRow(Icons.music_note, 'Tom', c.musica.tom ?? 'Não informado'),
+                const Divider(),
+                _InfoRow(Icons.person, 'Artista', c.musica.artistaNome),
+              ]),
+            ),
+          ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildInfoCard() {
-    return Card(
-      margin: const EdgeInsets.all(16),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            _buildInfoRow(
-              Icons.music_note,
-              'Tom',
-              widget.musica.tom ?? 'Não informado',
-            ),
-            const Divider(),
-            _buildInfoRow(Icons.person, 'Artista', widget.musica.artistaNome),
-          ],
-        ),
-      ),
-    );
-  }
+class _InfoRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
 
-  Widget _buildInfoRow(IconData icon, String label, String value) {
+  const _InfoRow(this.icon, this.label, this.value);
+
+  @override
+  Widget build(BuildContext context) {
     return Row(
       children: [
         Icon(icon, size: 20, color: Colors.grey[600]),
         const SizedBox(width: 8),
         Text('$label: ', style: const TextStyle(fontWeight: FontWeight.bold)),
-        Expanded(
-          child: Text(value, style: const TextStyle(color: Colors.grey)),
-        ),
+        Expanded(child: Text(value, style: const TextStyle(color: Colors.grey))),
       ],
     );
   }
