@@ -1,7 +1,7 @@
 class CifraScrollConfig {
-  static const double velocidadePadrao = 130.0;
+  static const double velocidadePadrao = 110.0;
   static const double velocidadeMin = 10.0;
-  static const double velocidadeMax = 650.0;
+  static const double velocidadeMax = 300.0;
   static const double velocidadeStep = 10.0;
 
   static const double fontSizePadrao = 16.0;
