@@ -259,27 +259,55 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
 
   Widget _buildAppBarTitle() {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           widget.musica.titulo,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          overflow: TextOverflow.ellipsis,
         ),
         Text(
           widget.musica.artistaNome,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.normal),
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal, color: Colors.white70),
+          overflow: TextOverflow.ellipsis,
         ),
       ],
     );
   }
 
   PreferredSizeWidget _buildTabBar() {
-    return TabBar(
-      controller: _tabController,
-      tabs: [
-        if (_hasCifra) const Tab(icon: Icon(Icons.music_note), text: 'Cifra'),
-        if (_hasYoutube) const Tab(icon: Icon(Icons.play_circle), text: 'Vídeo'),
-      ],
+    return PreferredSize(
+      preferredSize: const Size.fromHeight(44), // era ~72 com ícone grande + texto
+      child: TabBar(
+        controller: _tabController,
+        indicatorWeight: 2,
+        labelPadding: const EdgeInsets.symmetric(horizontal: 16),
+        tabs: [
+          if (_hasCifra)
+            const Tab(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.music_note, size: 16),
+                  SizedBox(width: 6),
+                  Text('Cifra', style: TextStyle(fontSize: 13)),
+                ],
+              ),
+            ),
+          if (_hasYoutube)
+            const Tab(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.play_circle, size: 16),
+                  SizedBox(width: 6),
+                  Text('Vídeo', style: TextStyle(fontSize: 13)),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -365,14 +393,8 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
     if (_hasCifraNativa && !_hasCifraWeb) return _buildCifraNativa();
     if (!_hasCifraNativa && _hasCifraWeb) return _buildCifraWebView();
 
-    return Column(
-      children: [
-        _buildSeletorModoCifra(),
-        Expanded(
-          child: _modoCifra == ModoCifra.nativa ? _buildCifraNativa() : _buildCifraWebView(),
-        ),
-      ],
-    );
+    // Tem ambos: só o Stack com o floating já cuida do seletor
+    return _modoCifra == ModoCifra.nativa ? _buildCifraNativa() : _buildCifraWebView();
   }
 
   Widget _buildSeletorModoCifra() {
@@ -450,6 +472,8 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
       _semitonsDelta,
     );
     final secoes = CifraParser.parsearSecoes(conteudo);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final usarDuasColunas = screenWidth > 800;
 
     return Stack(
       children: [
@@ -463,51 +487,82 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
           onPointerUp: (_) {
             if (_autoScrollAtivo) {
               _retomadaTimer = Timer(const Duration(seconds: 2), () {
-                if (mounted) {
-                  setState(() => _usuarioInteragindo = false);
-                }
+                if (mounted) setState(() => _usuarioInteragindo = false);
               });
             }
           },
           child: CustomScrollView(
             controller: _scrollController,
             slivers: [
-              // Barra de tom — some ao rolar, volta ao puxar
-              SliverAppBar(
-                automaticallyImplyLeading: false,
-                backgroundColor: const Color(0xFF1E1E1E),
-                pinned: false,
-                floating: true,
-                snap: true,
-                toolbarHeight: 44,
-                flexibleSpace: FlexibleSpaceBar(
-                  collapseMode: CollapseMode.pin,
-                  background: _buildBarraTom(),
-                ),
-              ),
-
-              // Conteúdo da cifra
+              // Barra de tom flutuante
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 72, 80),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ...secoes.map(
-                        (s) => CifraSecaoWidget(
-                          secao: s,
-                          fontSize: _scrollConfig.fontSize,
-                        ),
-                      ),
-                      const SizedBox(height: 80),
-                    ],
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    8,
+                    usarDuasColunas ? 16 : 72,
+                    80,
                   ),
+                  child: usarDuasColunas ? _buildCifraEmDuasColunas(secoes) : _buildCifraEmUmaColuna(secoes),
                 ),
               ),
             ],
           ),
         ),
         _buildControlesFixos(),
+      ],
+    );
+  }
+
+  Widget _buildCifraEmUmaColuna(List<SecaoCifra> secoes) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ...secoes.map((s) => CifraSecaoWidget(secao: s, fontSize: _scrollConfig.fontSize)),
+        const SizedBox(height: 80),
+      ],
+    );
+  }
+
+  Widget _buildCifraEmDuasColunas(List<SecaoCifra> secoes) {
+    // Distribui seções alternadamente entre col esquerda e col direita
+    // para manter a ordem de leitura (col esquerda = seções pares, col direita = ímpares)
+    final colunaEsquerda = <SecaoCifra>[];
+    final colunaDireita = <SecaoCifra>[];
+
+    for (int i = 0; i < secoes.length; i++) {
+      if (i.isEven) {
+        colunaEsquerda.add(secoes[i]);
+      } else {
+        colunaDireita.add(secoes[i]);
+      }
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Coluna esquerda
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: colunaEsquerda.map((s) => CifraSecaoWidget(secao: s, fontSize: _scrollConfig.fontSize)).toList(),
+          ),
+        ),
+        const SizedBox(width: 32),
+        // Divisor vertical
+        Container(
+          width: 1,
+          color: Colors.white12,
+          margin: const EdgeInsets.only(top: 4),
+        ),
+        const SizedBox(width: 32),
+        // Coluna direita
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: colunaDireita.map((s) => CifraSecaoWidget(secao: s, fontSize: _scrollConfig.fontSize)).toList(),
+          ),
+        ),
       ],
     );
   }
@@ -585,6 +640,18 @@ class _MusicaDetalhesPageState extends State<MusicaDetalhesPage> with SingleTick
       onFonteMenos: () => setState(() => _scrollConfig = _scrollConfig.diminuirFonte()),
       // ✅ slider — substitui onVelocidadeMais/onVelocidadeMenos
       onVelocidadeChanged: (v) => setState(() => _scrollConfig = _scrollConfig.comVelocidade(v)),
+      tomAtual: _tomAtualDisplay ?? widget.musica.tom,
+      semitonsDelta: _semitonsDelta,
+      onTomMenos: () => _transporTom(-1),
+      onTomMais: () => _transporTom(1),
+      onTomReset: _resetarTom,
+      modoCifra: (_hasCifraNativa && _hasCifraWeb) ? _modoCifra : null,
+      onModoChanged: (_hasCifraNativa && _hasCifraWeb)
+          ? (modo) {
+              setState(() => _modoCifra = modo);
+              if (modo == ModoCifra.web) _initializeWebView();
+            }
+          : null,
     );
   }
 

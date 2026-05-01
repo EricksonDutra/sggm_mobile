@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sggm/theme/app_theme.dart';
 import 'package:sggm/util/cifra_scroll_controller.dart';
+import 'package:sggm/views/musica_detalhes_page.dart';
 
 class CifraFloatingControls extends StatefulWidget {
   final CifraScrollConfig config;
@@ -9,6 +10,14 @@ class CifraFloatingControls extends StatefulWidget {
   final VoidCallback onFonteMais;
   final VoidCallback onFonteMenos;
   final ValueChanged<double> onVelocidadeChanged;
+  final String? tomAtual;
+  final int? semitonsDelta;
+  final VoidCallback? onTomMenos;
+  final VoidCallback? onTomMais;
+  final VoidCallback? onTomReset;
+
+  final ModoCifra? modoCifra;
+  final ValueChanged<ModoCifra>? onModoChanged;
 
   const CifraFloatingControls({
     super.key,
@@ -18,6 +27,13 @@ class CifraFloatingControls extends StatefulWidget {
     required this.onFonteMais,
     required this.onFonteMenos,
     required this.onVelocidadeChanged,
+    this.tomAtual,
+    this.semitonsDelta,
+    this.onTomMenos,
+    this.onTomMais,
+    this.onTomReset,
+    this.modoCifra,
+    this.onModoChanged,
   });
 
   @override
@@ -246,6 +262,37 @@ class _CifraFloatingControlsState extends State<CifraFloatingControls> with Sing
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
+          // ── Tom ────────────────────────────────────────
+          if (widget.tomAtual != null) ...[
+            _buildLabel(Icons.music_note, 'Tom'),
+            _buildControlRow(
+              valor: widget.tomAtual!,
+              onMenos: widget.onTomMenos ?? () {},
+              onMais: widget.onTomMais ?? () {},
+              iconMenos: Icons.remove_circle_outline,
+              iconMais: Icons.add_circle_outline,
+            ),
+            if ((widget.semitonsDelta ?? 0) != 0) ...[
+              const SizedBox(height: 4),
+              Center(
+                child: GestureDetector(
+                  onTap: widget.onTomReset,
+                  child: _buildBadgeSemitons(widget.semitonsDelta!),
+                ),
+              ),
+            ],
+            const _Divisor(),
+          ],
+
+          // ── Modo Local/Web ──────────────────────────────
+          if (widget.modoCifra != null) ...[
+            _buildLabel(Icons.swap_horiz, 'Modo'),
+            const SizedBox(height: 4),
+            _buildSeletorModo(),
+            const _Divisor(),
+          ],
+
+          // ── Fonte (existente) ───────────────────────────
           _buildLabel(Icons.text_fields, 'Fonte'),
           _buildControlRow(
             valor: '${widget.config.fontSize.toInt()}px',
@@ -255,6 +302,8 @@ class _CifraFloatingControlsState extends State<CifraFloatingControls> with Sing
             iconMais: Icons.text_increase,
           ),
           const _Divisor(),
+
+          // ── Auto-scroll (existente) ─────────────────────
           _buildLabel(Icons.auto_mode, 'Auto-scroll'),
           const SizedBox(height: 6),
           _buildBotaoScroll(scrollAtivo),
@@ -263,6 +312,63 @@ class _CifraFloatingControlsState extends State<CifraFloatingControls> with Sing
             child: scrollAtivo ? _buildControleVelocidade() : const SizedBox.shrink(),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildBadgeSemitons(int delta) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppTheme.presbyterianoVerde.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        '${delta > 0 ? "+" : ""}$delta  (toque p/ resetar)',
+        style: const TextStyle(fontSize: 10, color: AppTheme.presbyterianoVerdeClaro),
+      ),
+    );
+  }
+
+  Widget _buildSeletorModo() {
+    return Row(
+      children: [
+        Expanded(child: _buildChipModo('Local', Icons.phonelink_outlined, ModoCifra.nativa)),
+        const SizedBox(width: 6),
+        Expanded(child: _buildChipModo('Web', Icons.language, ModoCifra.web)),
+      ],
+    );
+  }
+
+  Widget _buildChipModo(String label, IconData icon, ModoCifra modo) {
+    final selecionado = widget.modoCifra == modo;
+    return GestureDetector(
+      onTap: () => widget.onModoChanged?.call(modo),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        decoration: BoxDecoration(
+          color: selecionado ? AppTheme.presbyterianoVerde : AppTheme.presbyterianoVerde.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: selecionado ? AppTheme.presbyterianoVerde : Colors.white24,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 13, color: selecionado ? Colors.white : Colors.white54),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: selecionado ? FontWeight.w700 : FontWeight.w400,
+                color: selecionado ? Colors.white : Colors.white54,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
