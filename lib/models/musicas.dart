@@ -37,10 +37,10 @@ class Musica {
       if (id != null) 'id': id,
       'titulo': titulo,
       'artista': artistaId,
-      'tom': tom,
-      'link_cifra': (linkCifra != null && linkCifra!.isEmpty) ? null : linkCifra,
-      'link_youtube': (linkYoutube != null && linkYoutube!.isEmpty) ? null : linkYoutube,
-      'conteudo_cifra': conteudoCifra,
+      if (tom != null && tom!.isNotEmpty) 'tom': tom,
+      if (linkCifra != null && linkCifra!.isNotEmpty) 'link_cifra': linkCifra,
+      if (linkYoutube != null && linkYoutube!.isNotEmpty) 'link_youtube': linkYoutube,
+      if (conteudoCifra != null && conteudoCifra!.isNotEmpty) 'conteudo_cifra': conteudoCifra,
     };
   }
 
