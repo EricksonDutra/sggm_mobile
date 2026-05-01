@@ -53,8 +53,9 @@ class CifraNativaTab extends StatelessWidget {
   }
 
   Widget _buildDuasColunas(List<SecaoCifra> secoes, double fontSize) {
-    final esquerda = [for (int i = 0; i < secoes.length; i += 2) secoes[i]];
-    final direita = [for (int i = 1; i < secoes.length; i += 2) secoes[i]];
+    final metade = (secoes.length / 2).ceil();
+    final esquerda = secoes.sublist(0, metade);
+    final direita = secoes.sublist(metade);
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -62,15 +63,16 @@ class CifraNativaTab extends StatelessWidget {
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: esquerda.map((s) => CifraSecaoWidget(secao: s, fontSize: fontSize)).toList(),
           ),
         ),
-        const SizedBox(width: 32),
-        Container(width: 1, color: Colors.white12, margin: const EdgeInsets.only(top: 4)),
-        const SizedBox(width: 32),
+        // Sem divisória — espaço entre colunas resolve visualmente
+        const SizedBox(width: 48),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: direita.map((s) => CifraSecaoWidget(secao: s, fontSize: fontSize)).toList(),
           ),
         ),
