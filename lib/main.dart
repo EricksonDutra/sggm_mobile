@@ -11,6 +11,7 @@ import 'package:sggm/controllers/eventos_controller.dart';
 import 'package:sggm/controllers/instrumentos_controller.dart';
 import 'package:sggm/controllers/musicas_controller.dart';
 import 'package:sggm/controllers/musicos_controller.dart';
+import 'package:sggm/services/musicas_service.dart';
 import 'package:sggm/services/notification_service.dart';
 import 'package:sggm/services/secure_token_service.dart';
 import 'package:sggm/services/token_migration_service.dart';
@@ -82,6 +83,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => InstrumentosProvider()),
         ChangeNotifierProvider(create: (_) => MusicasProvider()),
         ChangeNotifierProvider(create: (_) => ComentariosProvider()),
+        Provider(create: (_) => MusicasService()),
       ],
       child: Consumer<AuthProvider>(
         builder: (context, authProvider, _) {
