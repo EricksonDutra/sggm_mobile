@@ -163,7 +163,6 @@ class ApiService {
   static Future<Response> get(
     String endpoint, {
     Map<String, dynamic>? queryParameters,
-    bool useAuth = true,
   }) async {
     try {
       final response = await _instance._dio.get(
@@ -182,7 +181,6 @@ class ApiService {
   static Future<Response> post(
     String endpoint, {
     Map<String, dynamic>? body,
-    bool useAuth = true,
   }) async {
     try {
       final response = await _instance._dio.post(
@@ -201,7 +199,6 @@ class ApiService {
   static Future<Response> put(
     String endpoint, {
     Map<String, dynamic>? body,
-    bool useAuth = true,
   }) async {
     try {
       final response = await _instance._dio.put(
@@ -220,7 +217,6 @@ class ApiService {
   static Future<Response> patch(
     String endpoint, {
     Map<String, dynamic>? body,
-    bool useAuth = true,
   }) async {
     try {
       final response = await _instance._dio.patch(
@@ -237,9 +233,8 @@ class ApiService {
   }
 
   static Future<Response> delete(
-    String endpoint, {
-    bool useAuth = true,
-  }) async {
+    String endpoint,
+  ) async {
     try {
       final response = await _instance._dio.delete(
         endpoint,

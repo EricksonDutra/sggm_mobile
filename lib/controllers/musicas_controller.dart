@@ -27,11 +27,11 @@ class MusicasProvider extends ChangeNotifier {
 
       AppLogger.debug('listarMusicas status: ${response.statusCode}');
 
-      if (response.statusCode! == 200) {
+      if (response.statusCode == 200) {
         _musicas = _parseMusicasList(response.data);
         AppLogger.info('${_musicas.length} músicas carregadas');
       } else {
-        throw _exceptionFromStatus(response.statusCode, 'Erro ao listar músicas');
+        throw ErrorHandler.fromStatusCode(response.statusCode, fallback: 'Erro ao listar músicas');
       }
     } catch (e) {
       _errorMessage = ErrorHandler.handle(e).message;
@@ -52,12 +52,12 @@ class MusicasProvider extends ChangeNotifier {
 
       AppLogger.debug('adicionarMusica status: ${response.statusCode}');
 
-      if (response.statusCode! == 201 || response.statusCode! == 200) {
+      if (response.statusCode == 201 || response.statusCode == 200) {
         final novaMusica = Musica.fromJson(response.data);
         _musicas.add(novaMusica);
         AppLogger.info('Música adicionada: ID ${novaMusica.id}');
       } else {
-        throw _exceptionFromStatus(response.statusCode, 'Falha ao adicionar música');
+        throw ErrorHandler.fromStatusCode(response.statusCode, fallback: 'Falha ao adicionar música');
       }
     } catch (e) {
       _errorMessage = ErrorHandler.handle(e).message;
@@ -85,7 +85,7 @@ class MusicasProvider extends ChangeNotifier {
           AppLogger.info('Música atualizada: ID $id');
         }
       } else {
-        throw _exceptionFromStatus(response.statusCode, 'Falha ao atualizar música');
+        throw ErrorHandler.fromStatusCode(response.statusCode, fallback: 'Falha ao atualizar música');
       }
     } catch (e) {
       _errorMessage = ErrorHandler.handle(e).message;
@@ -110,7 +110,7 @@ class MusicasProvider extends ChangeNotifier {
         _musicas.removeWhere((m) => m.id == id);
         AppLogger.info('Música deletada: ID $id');
       } else {
-        throw _exceptionFromStatus(response.statusCode, 'Falha ao deletar música');
+        throw ErrorHandler.fromStatusCode(response.statusCode, fallback: 'Falha ao deletar música');
       }
     } catch (e) {
       _errorMessage = ErrorHandler.handle(e).message;
@@ -130,7 +130,7 @@ class MusicasProvider extends ChangeNotifier {
         AppLogger.info('Música encontrada: ID $id');
         return musica;
       }
-      throw _exceptionFromStatus(response.statusCode, 'Erro ao buscar música');
+      throw ErrorHandler.fromStatusCode(response.statusCode, fallback: 'Erro ao buscar música');
     } catch (e) {
       AppLogger.error('buscarMusica $id', e);
       return null;
@@ -173,19 +173,4 @@ class MusicasProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  AppException _exceptionFromStatus(int? statusCode, String fallback) {
-    switch (statusCode) {
-      case 401:
-        return const UnauthorizedException();
-      case 403:
-        return const ForbiddenException();
-      case 404:
-        return const NotFoundException();
-      case 422:
-        return const ValidationException();
-      default:
-        if (statusCode != null && statusCode >= 500) return ServerException(statusCode: statusCode);
-        return UnknownException(details: '$fallback (HTTP $statusCode)');
-    }
-  }
 }

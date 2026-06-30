@@ -193,7 +193,7 @@ class NotificationService {
     const details = NotificationDetails(android: androidDetails, iOS: iosDetails);
 
     await _localNotifications!.show(
-      DateTime.now().millisecond,
+      DateTime.now().millisecondsSinceEpoch % 2147483647,
       message.notification?.title ?? 'Nova Notificação',
       message.notification?.body ?? '',
       details,

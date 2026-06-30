@@ -36,9 +36,9 @@ class Evento {
 
     return Evento(
       id: json['id'],
-      nome: json['nome'],
+      nome: json['nome'] ?? '',
       dataEvento: json['data_evento'] ?? '',
-      local: json['local'],
+      local: json['local'] ?? '',
       descricao: json['descricao'],
       repertorio: repertorioList,
       tipo: json['tipo'] ?? 'CULTO',

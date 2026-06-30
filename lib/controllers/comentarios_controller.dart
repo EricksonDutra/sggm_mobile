@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sggm/core/errors/error_handler.dart';
 import 'package:sggm/models/comentario.dart';
 import 'package:sggm/services/comentario_service.dart';
 import 'package:sggm/util/app_logger.dart';
@@ -24,7 +25,7 @@ class ComentariosProvider extends ChangeNotifier {
     try {
       _comentarios = await ComentarioService.listarPorEvento(eventoId);
     } catch (e) {
-      _errorMessage = e.toString();
+      _errorMessage = ErrorHandler.handle(e).message;
       AppLogger.error('Erro ao carregar comentários', e);
     } finally {
       _setLoading(false);
@@ -37,7 +38,7 @@ class ComentariosProvider extends ChangeNotifier {
     try {
       _comentarios = await ComentarioService.listarPorMusica(eventoId, musicaId);
     } catch (e) {
-      _errorMessage = e.toString();
+      _errorMessage = ErrorHandler.handle(e).message;
       AppLogger.error('Erro ao carregar comentários por música', e);
     } finally {
       _setLoading(false);
@@ -60,7 +61,7 @@ class ComentariosProvider extends ChangeNotifier {
       notifyListeners();
       return true;
     } catch (e) {
-      erroUltimaAcao = e.toString().replaceFirst('Exception: ', '');
+      erroUltimaAcao = ErrorHandler.handle(e).message;
       AppLogger.error('Erro ao criar comentário', e);
       return false;
     }
