@@ -9,11 +9,11 @@ class AppConstants {
     defaultValue: 10,
   );
 
-  static const String escalasEndpoint = '$baseUrl/api/escalas/';
-  static const String musicosEndpoint = '$baseUrl/api/musicos/';
-  static const String eventosEndpoint = '$baseUrl/api/eventos/';
-  static const String instrumentosEndpoint = '$baseUrl/api/instrumentos/';
-  static const String musicasEndpoint = '$baseUrl/api/musicas/';
+  static const String escalasEndpoint = '/api/escalas/';
+  static const String musicosEndpoint = '/api/musicos/';
+  static const String eventosEndpoint = '/api/eventos/';
+  static const String instrumentosEndpoint = '/api/instrumentos/';
+  static const String musicasEndpoint = '/api/musicas/';
 
   static const String loginPath = '/api/login/';
   static const String refreshTokenPath = '/api/token/refresh/';

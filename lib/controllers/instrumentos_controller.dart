@@ -29,7 +29,7 @@ class InstrumentosProvider extends ChangeNotifier {
         _instrumentos = _parseInstrumentosList(response.data);
         AppLogger.info('${_instrumentos.length} instrumentos carregados');
       } else {
-        throw _exceptionFromStatus(response.statusCode, 'Erro ao listar instrumentos');
+        throw ErrorHandler.fromStatusCode(response.statusCode, fallback: 'Erro ao listar instrumentos');
       }
     } catch (e) {
       _errorMessage = ErrorHandler.handle(e).message;
@@ -57,7 +57,7 @@ class InstrumentosProvider extends ChangeNotifier {
         AppLogger.info('Instrumento adicionado: ID ${novoInstrumento.id}');
         return novoInstrumento;
       } else {
-        throw _exceptionFromStatus(response.statusCode, 'Falha ao criar instrumento');
+        throw ErrorHandler.fromStatusCode(response.statusCode, fallback: 'Falha ao criar instrumento');
       }
     } catch (e) {
       final appException = ErrorHandler.handle(e);
@@ -87,7 +87,7 @@ class InstrumentosProvider extends ChangeNotifier {
         AppLogger.info('Instrumento atualizado: ID $id');
         return true;
       } else {
-        throw _exceptionFromStatus(response.statusCode, 'Falha ao atualizar instrumento');
+        throw ErrorHandler.fromStatusCode(response.statusCode, fallback: 'Falha ao atualizar instrumento');
       }
     } catch (e) {
       final appException = ErrorHandler.handle(e);
@@ -114,7 +114,7 @@ class InstrumentosProvider extends ChangeNotifier {
         AppLogger.info('Instrumento deletado: ID $id');
         return true;
       } else {
-        throw _exceptionFromStatus(response.statusCode, 'Falha ao deletar instrumento');
+        throw ErrorHandler.fromStatusCode(response.statusCode, fallback: 'Falha ao deletar instrumento');
       }
     } catch (e) {
       _errorMessage = ErrorHandler.handle(e).message;
@@ -128,23 +128,7 @@ class InstrumentosProvider extends ChangeNotifier {
 
   // ── helpers ──────────────────────────────────────────────────────────────
 
-  AppException _exceptionFromStatus(int? statusCode, String fallback) {
-    switch (statusCode) {
-      case 401:
-        return const UnauthorizedException();
-      case 403:
-        return const ForbiddenException();
-      case 404:
-        return const NotFoundException();
-      case 422:
-        return const ValidationException();
-      default:
-        if (statusCode != null && statusCode >= 500) {
-          return ServerException(statusCode: statusCode);
-        }
-        return UnknownException(details: '$fallback (HTTP $statusCode)');
-    }
-  }
+
 
   List<Instrumento> _parseInstrumentosList(dynamic data) {
     final List<dynamic> resultsList;

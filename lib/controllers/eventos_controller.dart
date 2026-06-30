@@ -30,7 +30,7 @@ class EventoProvider with ChangeNotifier {
         _eventos = _parseEventosList(response.data);
         AppLogger.info('${_eventos.length} eventos carregados');
       } else {
-        throw _exceptionFromStatus(response.statusCode, 'Erro ao listar eventos');
+        throw ErrorHandler.fromStatusCode(response.statusCode, fallback: 'Erro ao listar eventos');
       }
     } catch (e) {
       final appException = ErrorHandler.handle(e);
@@ -57,7 +57,7 @@ class EventoProvider with ChangeNotifier {
         AppLogger.info('Evento adicionado: ID ${novoEvento.id}');
         return true;
       } else {
-        throw _exceptionFromStatus(response.statusCode, 'Falha ao criar evento');
+        throw ErrorHandler.fromStatusCode(response.statusCode, fallback: 'Falha ao criar evento');
       }
     } catch (e) {
       final appException = ErrorHandler.handle(e);
@@ -87,7 +87,7 @@ class EventoProvider with ChangeNotifier {
         }
         return true;
       } else {
-        throw _exceptionFromStatus(response.statusCode, 'Falha ao atualizar evento');
+        throw ErrorHandler.fromStatusCode(response.statusCode, fallback: 'Falha ao atualizar evento');
       }
     } catch (e) {
       final appException = ErrorHandler.handle(e);
@@ -114,7 +114,7 @@ class EventoProvider with ChangeNotifier {
         AppLogger.info('Evento deletado: ID $id');
         return true;
       } else {
-        throw _exceptionFromStatus(response.statusCode, 'Falha ao deletar evento');
+        throw ErrorHandler.fromStatusCode(response.statusCode, fallback: 'Falha ao deletar evento');
       }
     } catch (e) {
       final appException = ErrorHandler.handle(e);
@@ -144,7 +144,7 @@ class EventoProvider with ChangeNotifier {
         await listarEventos();
         return true;
       } else {
-        throw _exceptionFromStatus(response.statusCode, 'Falha ao atualizar setlist');
+        throw ErrorHandler.fromStatusCode(response.statusCode, fallback: 'Falha ao atualizar setlist');
       }
     } catch (e) {
       final appException = ErrorHandler.handle(e);
@@ -166,7 +166,7 @@ class EventoProvider with ChangeNotifier {
         AppLogger.info('Evento encontrado: ID $id');
         return Evento.fromJson(response.data);
       } else {
-        throw _exceptionFromStatus(response.statusCode, 'Evento não encontrado');
+        throw ErrorHandler.fromStatusCode(response.statusCode, fallback: 'Evento não encontrado');
       }
     } catch (e) {
       final appException = ErrorHandler.handle(e);
@@ -177,24 +177,6 @@ class EventoProvider with ChangeNotifier {
   }
 
   // ── helpers ──────────────────────────────────────────────────────────────
-
-  AppException _exceptionFromStatus(int? statusCode, String fallback) {
-    switch (statusCode) {
-      case 401:
-        return const UnauthorizedException();
-      case 403:
-        return const ForbiddenException();
-      case 404:
-        return const NotFoundException();
-      case 422:
-        return const ValidationException();
-      default:
-        if (statusCode != null && statusCode >= 500) {
-          return ServerException(statusCode: statusCode);
-        }
-        return UnknownException(details: '$fallback (HTTP $statusCode)');
-    }
-  }
 
   List<Evento> _parseEventosList(dynamic data) {
     final List<dynamic> resultsList;

@@ -76,6 +76,7 @@ class AuthProvider extends ChangeNotifier {
           nome: _userData?['nome'],
           username: _userData?['username'],
           email: _userData?['email'],
+          isAdmin: _isAdmin,
         );
 
         AppLogger.info('Access token renovado com sucesso');
@@ -155,6 +156,7 @@ class AuthProvider extends ChangeNotifier {
           nome: loginResponse['nome'],
           username: loginResponse['username'],
           email: loginResponse['email'],
+          isAdmin: _isAdmin,
         );
 
         AppLogger.info('Login realizado com sucesso');
@@ -237,6 +239,7 @@ class AuthProvider extends ChangeNotifier {
       _token = await _secureTokenService.getToken();
       _refreshToken = await _secureTokenService.getRefreshToken();
       _isLider = await _secureTokenService.getIsLider();
+      _isAdmin = await _secureTokenService.getIsAdmin();
 
       _userData = {
         'musico_id': await _secureTokenService.getMusicoId(),

@@ -19,7 +19,7 @@ import 'package:sggm/util/app_logger.dart';
 import 'package:sggm/util/navigation_service.dart';
 import 'package:sggm/views/evento_detalhes_loader_page.dart';
 import 'package:sggm/views/login_page.dart';
-import 'package:sggm/home_page.dart';
+import 'package:sggm/views/home_page.dart';
 import 'package:sggm/theme/app_theme.dart';
 import 'firebase_options.dart';
 
@@ -41,18 +41,20 @@ void main() async {
     AppLogger.error('Erro ao inicializar Firebase/Notificações', e, stackTrace);
   }
 
-  runApp(const MyApp());
+  runApp(MyApp(secureTokenService: secureTokenService));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final SecureTokenService secureTokenService;
+
+  const MyApp({super.key, required this.secureTokenService});
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        Provider<SecureTokenService>(
-          create: (_) => SecureTokenService(),
+        Provider<SecureTokenService>.value(
+          value: secureTokenService,
         ),
         ChangeNotifierProvider(
           create: (context) {

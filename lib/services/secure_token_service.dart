@@ -12,6 +12,7 @@ class SecureTokenService {
   static const String _emailKey = 'sggm_email'; // ✅ Adicionado
   static const String _biometricEnabledKey = 'sggm_biometric_enabled';
   static const String _biometricUsernameKey = 'sggm_biometric_username';
+  static const String _isAdminKey = 'sggm_is_admin';
 
   final FlutterSecureStorage _storage;
 
@@ -24,9 +25,10 @@ class SecureTokenService {
     required bool isLider,
     required int musicoId,
     required String tipoUsuario,
-    String? nome, // ✅ Adicionado
-    String? username, // ✅ Adicionado
-    String? email, // ✅ Adicionado
+    String? nome,
+    String? username,
+    String? email,
+    bool isAdmin = false,
   }) async {
     try {
       await _storage.write(
@@ -93,6 +95,13 @@ class SecureTokenService {
           iOptions: _iosOptions,
         );
       }
+
+      await _storage.write(
+        key: _isAdminKey,
+        value: isAdmin.toString(),
+        aOptions: _androidOptions,
+        iOptions: _iosOptions,
+      );
     } catch (e) {
       throw Exception('Erro ao salvar credenciais: $e');
     }
@@ -198,6 +207,19 @@ class SecureTokenService {
     }
   }
 
+  Future<bool> getIsAdmin() async {
+    try {
+      final value = await _storage.read(
+        key: _isAdminKey,
+        aOptions: _androidOptions,
+        iOptions: _iosOptions,
+      );
+      return value == 'true';
+    } catch (e) {
+      return false;
+    }
+  }
+
   // ========== VERIFICAÇÃO ==========
   Future<bool> hasCredentials() async {
     try {
@@ -248,6 +270,11 @@ class SecureTokenService {
       );
       await _storage.delete(
         key: _emailKey,
+        aOptions: _androidOptions,
+        iOptions: _iosOptions,
+      );
+      await _storage.delete(
+        key: _isAdminKey,
         aOptions: _androidOptions,
         iOptions: _iosOptions,
       );

@@ -67,7 +67,7 @@ class EscalasProvider extends ChangeNotifier {
         if (response.statusCode == 201 || response.statusCode == 200) {
           _escalas.add(Escala.fromJson(response.data));
         } else {
-          throw _exceptionFromStatus(response.statusCode, 'Falha ao publicar escala');
+          throw ErrorHandler.fromStatusCode(response.statusCode, fallback: 'Falha ao publicar escala');
         }
       }
       _rascunhosPorEvento.remove(eventoId); // limpa após publicar com sucesso
@@ -97,7 +97,7 @@ class EscalasProvider extends ChangeNotifier {
         _escalas = _parseEscalasList(response.data);
         AppLogger.info('${_escalas.length} escalas carregadas');
       } else {
-        throw _exceptionFromStatus(response.statusCode, 'Erro ao listar escalas');
+        throw ErrorHandler.fromStatusCode(response.statusCode, fallback: 'Erro ao listar escalas');
       }
     } catch (e) {
       _errorMessage = ErrorHandler.handle(e).message;
@@ -123,7 +123,7 @@ class EscalasProvider extends ChangeNotifier {
         AppLogger.info('Escala adicionada: ID ${novaEscala.id}');
         return true;
       } else {
-        throw _exceptionFromStatus(response.statusCode, 'Falha ao criar escala');
+        throw ErrorHandler.fromStatusCode(response.statusCode, fallback: 'Falha ao criar escala');
       }
     } catch (e) {
       _errorMessage = ErrorHandler.handle(e).message;
@@ -152,7 +152,7 @@ class EscalasProvider extends ChangeNotifier {
         }
         return true;
       } else {
-        throw _exceptionFromStatus(response.statusCode, 'Falha ao atualizar escala');
+        throw ErrorHandler.fromStatusCode(response.statusCode, fallback: 'Falha ao atualizar escala');
       }
     } catch (e) {
       _errorMessage = ErrorHandler.handle(e).message;
@@ -178,7 +178,7 @@ class EscalasProvider extends ChangeNotifier {
         AppLogger.info('Escala deletada: ID $id');
         return true;
       } else {
-        throw _exceptionFromStatus(response.statusCode, 'Falha ao deletar escala');
+        throw ErrorHandler.fromStatusCode(response.statusCode, fallback: 'Falha ao deletar escala');
       }
     } catch (e) {
       _errorMessage = ErrorHandler.handle(e).message;
@@ -200,7 +200,7 @@ class EscalasProvider extends ChangeNotifier {
         AppLogger.debug('${escalas.length} escalas encontradas para evento $eventoId');
         return escalas;
       } else {
-        throw _exceptionFromStatus(response.statusCode, 'Erro ao buscar escalas do evento');
+        throw ErrorHandler.fromStatusCode(response.statusCode, fallback: 'Erro ao buscar escalas do evento');
       }
     } catch (e) {
       _errorMessage = ErrorHandler.handle(e).message;
@@ -219,7 +219,7 @@ class EscalasProvider extends ChangeNotifier {
         AppLogger.debug('${escalas.length} escalas encontradas para músico $musicoId');
         return escalas;
       } else {
-        throw _exceptionFromStatus(response.statusCode, 'Erro ao buscar escalas do músico');
+        throw ErrorHandler.fromStatusCode(response.statusCode, fallback: 'Erro ao buscar escalas do músico');
       }
     } catch (e) {
       _errorMessage = ErrorHandler.handle(e).message;
@@ -263,7 +263,7 @@ class EscalasProvider extends ChangeNotifier {
         }
         return true;
       } else {
-        throw _exceptionFromStatus(response.statusCode, 'Erro ao confirmar presença');
+        throw ErrorHandler.fromStatusCode(response.statusCode, fallback: 'Erro ao confirmar presença');
       }
     } catch (e) {
       _errorMessage = ErrorHandler.handle(e).message;
@@ -275,25 +275,6 @@ class EscalasProvider extends ChangeNotifier {
     }
   }
 
-  // ── helpers ──────────────────────────────────────────────────────────────
-
-  AppException _exceptionFromStatus(int? statusCode, String fallback) {
-    switch (statusCode) {
-      case 401:
-        return const UnauthorizedException();
-      case 403:
-        return const ForbiddenException();
-      case 404:
-        return const NotFoundException();
-      case 422:
-        return const ValidationException();
-      default:
-        if (statusCode != null && statusCode >= 500) {
-          return ServerException(statusCode: statusCode);
-        }
-        return UnknownException(details: '$fallback (HTTP $statusCode)');
-    }
-  }
 
   List<Escala> _parseEscalasList(dynamic data) {
     final List<dynamic> resultsList;

@@ -23,8 +23,8 @@ class Musica {
     return Musica(
       id: json['id'],
       titulo: json['titulo'] ?? 'Sem Título',
-      artistaId: json['artista'] as int, // ✅ ID do artista
-      artistaNome: json['artista_nome'] as String,
+      artistaId: (json['artista'] as int?) ?? 0,
+      artistaNome: (json['artista_nome'] as String?) ?? '',
       tom: json['tom'], // Pode ser null
       linkCifra: json['link_cifra'],
       linkYoutube: json['link_youtube'],

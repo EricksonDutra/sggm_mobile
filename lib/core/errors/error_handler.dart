@@ -85,4 +85,27 @@ class ErrorHandler {
         return UnknownException(details: details);
     }
   }
+
+  /// Mapeia um [statusCode] HTTP para a [AppException] correspondente.
+  /// Uso direto nos controllers quando o Dio não lança exceção
+  /// (ex: validateStatus < 500).
+  static AppException fromStatusCode(int? statusCode, {String? fallback}) {
+    switch (statusCode) {
+      case 401:
+        return const UnauthorizedException();
+      case 403:
+        return const ForbiddenException();
+      case 404:
+        return const NotFoundException();
+      case 422:
+        return const ValidationException();
+      default:
+        if (statusCode != null && statusCode >= 500) {
+          return ServerException(statusCode: statusCode);
+        }
+        return UnknownException(
+          details: '${fallback ?? 'Erro inesperado'} (HTTP $statusCode)',
+        );
+    }
+  }
 }
